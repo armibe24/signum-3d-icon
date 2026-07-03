@@ -43,9 +43,14 @@ Signum instead runs a conversion pipeline:
 4. **Normalize** (`src/svg/normalize.ts`): y-flip to y-up, center on origin, rescale so every icon
    spans the same normalized size (so depth/bevel sliders behave consistently).
 5. **Extrude** (`src/geometry/extrude.ts`, main thread): polygons → `THREE.Shape`s with holes →
-   `ExtrudeGeometry` with bevel. `bevelOffset = -bevelSize` keeps the exact 2D silhouette; hard
-   bevel = single 45° chamfer, rounded bevel = user-set segments; creased normals keep rims smooth
-   and edges crisp. Separate parts get a microscopic depth jitter so coplanar caps never z-fight.
+   `ExtrudeGeometry` with bevel. Rings are sanitized first (closing duplicates and near-duplicate
+   points removed — those produce degenerate triangles), and the bevel is adaptively clamped below
+   half the narrowest feature width (2·Area/Perimeter ribbon estimate) so the inset outline can
+   never self-intersect into spikes. `bevelOffset = -bevelSize` keeps the exact 2D silhouette;
+   bevel styles: none (clean straight extrusion), hard (single 45° chamfer), rounded (user-set
+   segments); creased normals keep rims smooth and edges crisp. Separate parts get a microscopic
+   depth jitter so coplanar caps never z-fight, and geometry that still comes out invalid is
+   rejected with a warning instead of rendered.
 
 Results are cached at both stages (LRU, `src/geometry/cache.ts`); rebuilds are debounced and
 version-stamped so stale worker replies from fast slider drags are dropped. Material, lighting,
@@ -82,13 +87,20 @@ export, so exported frames match the preview exactly and a keyframe timeline can
 
 ## Implemented features
 
-- **Viewport**: orbit/pan/zoom (damped), fit & reset camera, camera auto-rotate, grid toggle
-  (viewport-only), transparent/checkerboard/solid/gradient/studio backgrounds, floor shadow with
-  soft option, processing indicator, responsive resize.
-- **Icons**: searchable browser over all ~1,500 bundled lucide icons with live grid previews;
-  custom SVG import via button or drag & drop; complexity/unsupported-feature warnings.
-- **Geometry**: stroke width, extrude depth, bevel amount/segments, hard vs rounded bevel,
-  union vs separate parts, fast/balanced/high quality, normalize size, object scale, reset.
+- **Viewport**: orbit/pan/zoom (damped), a **render frame** overlay showing the exact export crop
+  (fixed render fov + aspect; the viewport widens around it, so exports match the frame at any
+  window size), fit & reset camera, camera auto-rotate, grid toggle (viewport-only),
+  transparent/checkerboard/solid/gradient/studio backgrounds, floor shadow with soft option
+  (off by default for performance), processing indicator, responsive resize.
+- **Icons**: searchable browser over the full bundled lucide set (~1,700 entries) with live grid
+  previews, paged grid with "show more", empty state; custom SVG import via button or drag & drop;
+  complexity/unsupported-feature warnings. All app UI icons also come from the local lucide data
+  (`src/components/common/Icon.tsx`) — no remote assets.
+- **Typography**: DM Sans (UI) and JetBrains Mono (technical text) ship as local woff2 files in
+  `src/assets/fonts/` with their OFL licenses — no external font requests.
+- **Geometry**: stroke width, extrude depth, bevel style (none / hard / rounded) with
+  amount/segments, union vs separate parts, fast/balanced/high quality (balanced by default),
+  normalize size, object scale, reset.
 - **Material**: 8 presets (black/silver/gold metal, white clay, soft plastic, neon glow, dark
   glossy, warm matte) + 8 modes (solid, clay, plastic, metal, chrome, soft metallic, glassy,
   emissive); base/emissive color, roughness, metalness, opacity, clearcoat, emissive intensity,

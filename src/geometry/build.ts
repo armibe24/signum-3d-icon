@@ -17,7 +17,7 @@ import { store } from '../store/store'
 import type { AppSettings, MultiPolygon } from '../types'
 import { parseSvg } from '../svg/parse'
 import type { SvgWorkerRequest, SvgWorkerResponse } from '../svg/types'
-import { extrudeParts } from './extrude'
+import { extrudeParts, geometryLooksValid } from './extrude'
 import { geometryCache, polygonCache } from './cache'
 import { lucideSvg } from '../icons/lucide'
 
@@ -132,6 +132,13 @@ class GeometryBuilder {
 
       if (id !== this.runId) return
       const geometry = extrudeParts(parts, settings.geometry)
+      if (!geometryLooksValid(geometry)) {
+        warnings = [...warnings, 'This icon produced invalid 3D geometry — keeping the previous mesh.']
+        geometry.dispose()
+        store.setTransient({ processing: false, warnings })
+        store.toast(warnings[warnings.length - 1], 'error')
+        return
+      }
       geometryCache.set(gKey, { geometry, inUse: true })
       this.deliver(geometry, warnings, gKey)
     } catch (e) {

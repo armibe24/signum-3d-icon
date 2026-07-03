@@ -24,8 +24,9 @@ import { evaluatePose } from './animation'
 import { applyMaterialSettings, createIconMaterial } from './materials'
 import { applyLightingSettings, createLightRig, type LightRig } from './lights'
 import { resolveBackground } from './background'
+import { BASE_FOV, viewportFov } from './frame'
 
-const DEFAULT_FOV = 35
+const DEFAULT_FOV = BASE_FOV
 
 export class SceneManager {
   readonly scene = new THREE.Scene()
@@ -52,6 +53,8 @@ export class SceneManager {
   gridVisible = false
   private userScale = 1
   private meshBaseRadius = 1
+  /** export aspect ratio — drives the viewport fov & render frame */
+  private exportAspect = 1
 
   constructor() {
     this.mesh = new THREE.Mesh(new THREE.BufferGeometry(), this.material)
@@ -139,7 +142,19 @@ export class SceneManager {
     if (w === 0 || h === 0) return
     this.renderer.setSize(w, h)
     this.camera.aspect = w / h
+    this.updateViewportFov()
+  }
+
+  /** widen the viewport fov so the fixed-fov render frame always fits */
+  private updateViewportFov(): void {
+    this.camera.fov = viewportFov(this.camera.aspect, this.exportAspect)
     this.camera.updateProjectionMatrix()
+  }
+
+  setExportAspect(aspect: number): void {
+    if (!isFinite(aspect) || aspect <= 0) return
+    this.exportAspect = aspect
+    this.updateViewportFov()
   }
 
   /* ---------------- geometry ---------------- */
@@ -223,11 +238,14 @@ export class SceneManager {
     this.setCameraState({ position: [1.4, 1.1, 3.9], target: [0, 0, 0], autoRotate: this.controls?.autoRotate ?? false })
   }
 
-  /** Frame the object: keep view direction, adjust distance to fit. */
+  /** Frame the object: keep view direction, adjust distance to fit.
+      Fits against the RENDER frame (BASE_FOV), not the wider viewport,
+      so "fit" means "fills the export nicely". */
   fitCamera(): void {
     const radius = Math.max(this.meshBaseRadius * this.userScale, 0.001)
-    const fov = THREE.MathUtils.degToRad(this.camera.fov)
-    const distance = (radius / Math.tan(fov / 2)) * 1.25
+    const renderFov = THREE.MathUtils.degToRad(BASE_FOV)
+    const fov = Math.min(renderFov, 2 * Math.atan(Math.tan(renderFov / 2) * this.exportAspect))
+    const distance = (radius / Math.tan(fov / 2)) * 1.18
     const dir = this.camera.position.clone().sub(this.controls.target).normalize()
     if (dir.lengthSq() < 1e-9) dir.set(0, 0.25, 1).normalize()
     this.controls.target.set(0, 0, 0)

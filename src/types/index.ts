@@ -14,7 +14,7 @@ export interface IconSource {
 }
 
 export type GeometryQuality = 'fast' | 'balanced' | 'high'
-export type BevelStyle = 'hard' | 'rounded'
+export type BevelStyle = 'none' | 'hard' | 'rounded'
 export type ShapeCombine = 'union' | 'separate'
 
 export interface GeometrySettings {
@@ -191,7 +191,8 @@ export function defaultSettings(): AppSettings {
       rim: 1.6,
       keyAzimuth: 35,
       keyElevation: 45,
-      shadows: true,
+      // performance-friendly defaults: shadows are opt-in
+      shadows: false,
       softShadows: true,
     },
     background: { mode: 'checkerboard', color: '#0c2029', color2: '#123240' },

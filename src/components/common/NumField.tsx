@@ -2,6 +2,7 @@
    globally). Commits on blur / Enter, clamps to range. */
 
 import { useEffect, useState } from 'react'
+import { Icon } from './Icon'
 
 interface Props {
   value: number
@@ -49,14 +50,10 @@ export function NumField({ value, min, max, step = 1, disabled, onChange }: Prop
       />
       <div className="numfield-steppers">
         <button type="button" tabIndex={-1} onClick={() => nudge(1)} aria-label="increase">
-          <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-            <path d="M1.5 5 4 2.5 6.5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-          </svg>
+          <Icon name="chevron-up" size={9} strokeWidth={2.6} />
         </button>
         <button type="button" tabIndex={-1} onClick={() => nudge(-1)} aria-label="decrease">
-          <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-            <path d="M1.5 3 4 5.5 6.5 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-          </svg>
+          <Icon name="chevron-down" size={9} strokeWidth={2.6} />
         </button>
       </div>
     </div>

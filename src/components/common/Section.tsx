@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { store, useStore } from '../../store/store'
+import { Icon } from './Icon'
 
 interface Props {
   id: string
@@ -30,9 +31,7 @@ export function Section({ id, title, defaultOpen = false, children }: Props) {
     <section ref={ref} className={`side-section${open ? ' open' : ''}`}>
       <button type="button" className="side-heading" onClick={() => setOpen(!open)}>
         {title}
-        <svg className="chev" width="10" height="10" viewBox="0 0 10 10" fill="none">
-          <path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        </svg>
+        <Icon className="chev" name="chevron-down" size={11} strokeWidth={2.4} />
       </button>
       <div className="side-body">{children}</div>
     </section>

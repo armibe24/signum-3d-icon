@@ -13,6 +13,7 @@ import * as THREE from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { sceneManager } from '../../engine/SceneManager'
 import { resolveBackground } from '../../engine/background'
+import { BASE_FOV } from '../../engine/frame'
 import type { AnimationSettings, BackgroundSettings } from '../../types'
 
 export class ExportRenderer {
@@ -66,7 +67,10 @@ export class ExportRenderer {
 
     sceneManager.applyPose(anim, time)
 
+    // same position/orientation as the viewport camera, but the fixed
+    // render fov — this crops exactly to the on-screen render frame
     this.camera.copy(sceneManager.camera)
+    this.camera.fov = BASE_FOV
     this.camera.aspect = this.width / this.height
     this.camera.updateProjectionMatrix()
 

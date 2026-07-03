@@ -4,12 +4,15 @@
    picker; drag & drop lands on the viewport (see Viewport3D).
    ============================================================ */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { searchIcons, lucideSvg } from '../icons/lucide'
 import { setSlice, store, useStore } from '../store/store'
 import { pickFile, readFileText } from '../utils/file'
+import { Icon } from './common/Icon'
 
-const GRID_LIMIT = 144
+/** page size — search always runs over the FULL catalog, this only
+    limits how many previews are mounted at once */
+const GRID_PAGE = 144
 
 export async function importSvgFile(file: File): Promise<void> {
   if (!/\.svg$/i.test(file.name) && file.type !== 'image/svg+xml') {
@@ -41,36 +44,56 @@ function IconCell({ id, selected }: { id: string; selected: boolean }) {
 
 export function IconBrowser() {
   const [query, setQuery] = useState('')
+  const [limit, setLimit] = useState(GRID_PAGE)
   const icon = useStore((s) => s.settings.icon)
   const warnings = useStore((s) => s.warnings)
 
+  // search covers the whole bundled lucide set (~1,500 icons)
   const results = useMemo(() => searchIcons(query), [query])
-  const shown = results.slice(0, GRID_LIMIT)
+  useEffect(() => setLimit(GRID_PAGE), [query])
+  const shown = results.slice(0, limit)
 
   return (
     <div className="side-rows">
       <div className="icon-search">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-          <circle cx="11" cy="11" r="7" />
-          <path d="m21 21-4.3-4.3" />
-        </svg>
+        <Icon name="search" size={12} strokeWidth={2.4} />
         <input
-          placeholder="Search lucide icons…"
+          placeholder={`Search ${searchIcons('').length} lucide icons…`}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.stopPropagation()}
         />
       </div>
 
-      <div className="icon-grid">
-        {shown.map((e) => (
-          <IconCell key={e.id} id={e.id} selected={icon.type === 'lucide' && icon.name === e.id} />
-        ))}
-      </div>
+      {results.length === 0 ? (
+        <div className="icon-empty">
+          <Icon name="search-x" size={18} strokeWidth={1.8} />
+          <span>
+            No icon matches “{query.trim()}”.
+            <br />
+            Try a different term or import an SVG below.
+          </span>
+        </div>
+      ) : (
+        <div className="icon-grid">
+          {shown.map((e) => (
+            <IconCell key={e.id} id={e.id} selected={icon.type === 'lucide' && icon.name === e.id} />
+          ))}
+          {results.length > limit && (
+            <button
+              type="button"
+              className="icon-more"
+              onClick={() => setLimit(limit + GRID_PAGE * 2)}
+            >
+              Show more ({results.length - limit} left)
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="icon-meta">
         <span>
-          {results.length > GRID_LIMIT ? `${GRID_LIMIT} of ${results.length}` : `${results.length}`} icons
+          {results.length > shown.length ? `${shown.length} of ${results.length}` : `${results.length}`} icons
         </span>
         <b>{icon.type === 'custom' ? `custom: ${icon.name}` : icon.name}</b>
       </div>

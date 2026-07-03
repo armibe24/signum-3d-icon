@@ -39,6 +39,7 @@ function wireEngine() {
     sceneManager.applyLighting(s.lighting)
     sceneManager.applyBackground(s.background)
     sceneManager.setUserScale(s.geometry.scale)
+    sceneManager.setExportAspect(s.export.width / Math.max(s.export.height, 1))
   }
   applyAll()
   store.subscribe(() => {
@@ -48,6 +49,8 @@ function wireEngine() {
     if (s.lighting !== prev.lighting) sceneManager.applyLighting(s.lighting)
     if (s.background !== prev.background) sceneManager.applyBackground(s.background)
     if (s.geometry.scale !== prev.geometry.scale) sceneManager.setUserScale(s.geometry.scale)
+    if (s.export !== prev.export)
+      sceneManager.setExportAspect(s.export.width / Math.max(s.export.height, 1))
     prev = s
   })
 

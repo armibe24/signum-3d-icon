@@ -1,5 +1,6 @@
 import { Select } from './common/Select'
 import { NumField } from './common/NumField'
+import { Icon } from './common/Icon'
 import { setSlice, useStore } from '../store/store'
 import { exportAnimation, exportStill } from '../utils/export/exporter'
 import { store } from '../store/store'
@@ -76,9 +77,7 @@ export function ExportPanel() {
               {job.label} {Math.round(job.progress * 100)}%
             </span>
             <button type="button" className="iconbtn" title="Cancel export" onClick={job.cancel}>
-              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                <path d="M2 2l8 8M10 2l-8 8" />
-              </svg>
+              <Icon name="x" size={12} strokeWidth={2.2} />
             </button>
           </div>
           <div className="progress-track">
@@ -89,11 +88,13 @@ export function ExportPanel() {
         <div className="export-btns">
           <button type="button" className="btn btn--sm btn--teal"
             onClick={() => exportStill(store.get().settings).catch((e) => store.toast(String(e), 'error'))}>
-            Export still
+            <Icon name="image-down" size={12} strokeWidth={2.2} />
+            Still
           </button>
           <button type="button" className="btn btn--sm btn--cyan"
             onClick={() => exportAnimation(store.get().settings)}>
-            Export animation
+            <Icon name="clapperboard" size={12} strokeWidth={2.2} />
+            Animation
           </button>
         </div>
       )}
