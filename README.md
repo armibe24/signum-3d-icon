@@ -44,15 +44,20 @@ Signum instead runs a conversion pipeline:
    smooth, minimal outlines (the fix for spiky/banded walls).
 4. **Normalize** (`src/svg/normalize.ts`): y-flip to y-up, center on origin, rescale so every icon
    spans the same normalized size (so depth/bevel sliders behave consistently).
-5. **Extrude** (`src/geometry/extrude.ts`, main thread): polygons → `THREE.Shape`s with holes →
-   `ExtrudeGeometry` with bevel. Rings are sanitized first (closing duplicates and near-duplicate
-   points removed — those produce degenerate triangles), and the bevel is adaptively clamped below
-   half the narrowest feature width (2·Area/Perimeter ribbon estimate) so the inset outline can
-   never self-intersect into spikes. `bevelOffset = -bevelSize` keeps the exact 2D silhouette;
-   bevel styles: none (clean straight extrusion), hard (single 45° chamfer), rounded (user-set
-   segments); creased normals keep rims smooth and edges crisp. Separate parts get a microscopic
-   depth jitter so coplanar caps never z-fight, and geometry that still comes out invalid is
-   rejected with a warning instead of rendered.
+5. **Mesh building** (`src/geometry/mesh.ts`, main thread — replaces `THREE.ExtrudeGeometry`):
+   ExtrudeGeometry bevels by moving contour vertices along corner bisectors with no
+   self-intersection handling, which folds caps into overlapping planes at acute corners. Signum
+   instead computes every bevel ring as a **robust polygon erosion** (boolean difference against a
+   buffered boundary, in the worker) and assembles the solid from regions that are valid by
+   construction: straight walls along the exact base outline (silhouette preserved), annular bevel
+   bands triangulated between consecutive erosion levels, and caps from the deepest level. Every
+   surface is emitted exactly once — no duplicate/coplanar faces, no z-fighting, no folds, no
+   spikes; thin features simply receive lower rounded tops. Bevel styles: none / hard (45°
+   chamfer) / rounded (2–8 segments); the amount is clamped to the shape's thinnest feature and
+   reduced or disabled with a visible warning when the shape can't absorb it. Shading modes (flat,
+   smooth, smooth-by-angle with threshold) recompute normals after assembly without re-running the
+   SVG pipeline. Separate parts get a microscopic depth jitter so coplanar caps never z-fight, and
+   geometry that still comes out invalid is rejected with a warning instead of rendered.
 
 Results are cached at both stages (LRU, `src/geometry/cache.ts`); rebuilds are debounced and
 version-stamped so stale worker replies from fast slider drags are dropped. Material, lighting,
@@ -101,8 +106,9 @@ export, so exported frames match the preview exactly and a keyframe timeline can
 - **Typography**: DM Sans (UI) and JetBrains Mono (technical text) ship as local woff2 files in
   `src/assets/fonts/` with their OFL licenses — no external font requests.
 - **Geometry**: stroke width, extrude depth, bevel style (none / hard / rounded) with
-  amount/segments, union vs separate parts, fast/balanced/high quality (balanced by default),
-  normalize size, object scale, reset.
+  amount/segments and automatic safety clamping, shading modes (flat / smooth / smooth-by-angle
+  with threshold slider), union vs separate parts, fast/balanced/high quality (balanced by
+  default), normalize size, object scale, reset.
 - **Material**: 8 presets (black/silver/gold metal, white clay, soft plastic, neon glow, dark
   glossy, warm matte) + 8 modes (solid, clay, plastic, metal, chrome, soft metallic, glassy,
   emissive); base/emissive color, roughness, metalness, opacity, clearcoat, emissive intensity,

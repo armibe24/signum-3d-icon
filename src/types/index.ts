@@ -15,6 +15,7 @@ export interface IconSource {
 
 export type GeometryQuality = 'fast' | 'balanced' | 'high'
 export type BevelStyle = 'none' | 'hard' | 'rounded'
+export type ShadingMode = 'flat' | 'smooth' | 'angle'
 export type ShapeCombine = 'union' | 'separate'
 
 export interface GeometrySettings {
@@ -25,6 +26,10 @@ export interface GeometrySettings {
   bevelAmount: number
   bevelSegments: number
   bevelStyle: BevelStyle
+  /** normal smoothing: flat faces, all-smooth, or smooth below an angle */
+  shading: ShadingMode
+  /** crease threshold for 'angle' shading, degrees */
+  shadingAngle: number
   /** union everything into one solid vs. keep elements as grouped parts */
   combine: ShapeCombine
   quality: GeometryQuality
@@ -166,6 +171,8 @@ export function defaultSettings(): AppSettings {
       bevelAmount: 2.4,
       bevelSegments: 4,
       bevelStyle: 'rounded',
+      shading: 'angle',
+      shadingAngle: 45,
       combine: 'union',
       quality: 'balanced',
       normalizeSize: true,
@@ -230,12 +237,16 @@ export type Ring = Pair[]
 export type PolygonWithHoles = Ring[]
 export type MultiPolygon = PolygonWithHoles[]
 
-/** One independently-extruded piece of the icon */
-export interface GeometryPart {
-  polygons: MultiPolygon
-}
-
-export interface ProcessedIcon {
-  parts: GeometryPart[]
-  warnings: string[]
+/**
+ * One independently-extruded piece of the icon, with pre-computed robust
+ * bevel data: `levels[k]` is the base outline eroded by the bevel profile
+ * inset of step k+1, `bands[k]` is the annular region between step k and
+ * k+1 (what the bevel surface spans). Empty levels/bands = no bevel.
+ */
+export interface BevelPartData {
+  base: MultiPolygon
+  levels: MultiPolygon[]
+  bands: MultiPolygon[]
+  /** effective (possibly clamped) bevel amount, 0 = bevel disabled */
+  bevel: number
 }

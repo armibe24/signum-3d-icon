@@ -12,6 +12,7 @@
 
 import polygonClipping from 'polygon-clipping'
 import type { MultiPolygon, PolygonWithHoles, Ring } from '../types'
+import { bufferPolyline } from './outline'
 
 type PcGeom = Parameters<typeof polygonClipping.union>[0]
 
@@ -62,4 +63,41 @@ export function unionPolygons(polys: PolygonWithHoles[]): UnionResult {
 
   // 3) last resort: no boolean at all — overlapping pieces stay separate
   return { polygons: polys, clean: false }
+}
+
+/**
+ * Robust polygon erosion (inward offset): P ⊖ disk(d), computed as
+ * P minus a buffer of P's boundary. Unlike naive per-vertex bisector
+ * offsetting (what ExtrudeGeometry's bevel does), this can never fold or
+ * self-intersect — thin features simply erode away, acute corners round
+ * off. Returns [] when the polygon erodes to nothing (or the boolean
+ * backend fails), which callers treat as "inset not feasible".
+ */
+export function erodePolygons(mp: MultiPolygon, distance: number, circleSegments: number): MultiPolygon {
+  if (distance <= 0 || mp.length === 0) return mp
+  const pieces: Ring[] = []
+  for (const poly of mp) {
+    for (const ring of poly) {
+      pieces.push(
+        ...bufferPolyline(ring, true, distance * 2, { circleSegments, simplifyEpsilon: 0 }),
+      )
+    }
+  }
+  const boundary = unionRings(pieces)
+  try {
+    return polygonClipping.difference(mp as PcGeom, boundary.polygons as PcGeom) as MultiPolygon
+  } catch {
+    return []
+  }
+}
+
+/** Boolean difference wrapper (same isolation reasoning as union). */
+export function differencePolygons(subject: MultiPolygon, clip: MultiPolygon): MultiPolygon {
+  if (!subject.length) return []
+  if (!clip.length) return subject
+  try {
+    return polygonClipping.difference(subject as PcGeom, clip as PcGeom) as MultiPolygon
+  } catch {
+    return subject
+  }
 }

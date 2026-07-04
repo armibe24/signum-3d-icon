@@ -21,17 +21,46 @@ export interface ParsedSvg {
   warnings: string[]
 }
 
-export interface SvgWorkerRequest {
+import type { BevelPartData, BevelStyle, GeometryQuality } from '../types'
+
+/** outline + boolean + normalize — produces the 2D solid per part */
+export interface ProcessRequest {
+  op: 'process'
   id: number
   parsed: ParsedSvg
   combine: 'union' | 'separate'
-  quality: 'fast' | 'balanced' | 'high'
+  quality: GeometryQuality
   normalizeSize: boolean
 }
 
-export interface SvgWorkerResponse {
+/** robust bevel-ring computation (erosion levels + annular bands) */
+export interface BevelRequest {
+  op: 'bevel'
+  id: number
+  parts: MultiPolygon[]
+  style: Exclude<BevelStyle, 'none'>
+  amount: number
+  segments: number
+  depth: number
+  quality: GeometryQuality
+}
+
+export type SvgWorkerRequest = ProcessRequest | BevelRequest
+
+export interface ProcessResponse {
+  op: 'process'
   id: number
   parts: MultiPolygon[]
   warnings: string[]
   error?: string
 }
+
+export interface BevelResponse {
+  op: 'bevel'
+  id: number
+  parts: BevelPartData[]
+  warnings: string[]
+  error?: string
+}
+
+export type SvgWorkerResponse = ProcessResponse | BevelResponse

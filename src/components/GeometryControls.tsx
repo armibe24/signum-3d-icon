@@ -7,6 +7,7 @@ import { sceneManager } from '../engine/SceneManager'
 
 export function GeometryControls() {
   const g = useStore((s) => s.settings.geometry)
+  const bevelWarnings = useStore((s) => s.warnings).filter((w) => /bevel/i.test(w))
 
   return (
     <div className="side-rows">
@@ -24,9 +25,27 @@ export function GeometryControls() {
       <Slider label="Bevel amount" value={g.bevelAmount} min={0} max={10} step={0.1} decimals={1}
         disabled={g.bevelStyle === 'none'}
         onChange={(v) => setSlice('geometry', { bevelAmount: v })} />
-      <Slider label="Bevel segments" value={g.bevelSegments} min={1} max={12} step={1}
+      <Slider label="Bevel segments" value={g.bevelSegments} min={2} max={8} step={1}
         disabled={g.bevelStyle !== 'rounded' || g.bevelAmount === 0}
         onChange={(v) => setSlice('geometry', { bevelSegments: v })} />
+      {bevelWarnings.length > 0 && (
+        <div className="warnbox">
+          {bevelWarnings.map((w, i) => (
+            <span key={i}>⚠ {w}</span>
+          ))}
+        </div>
+      )}
+      <Select label="Shading" value={g.shading}
+        options={[
+          { value: 'angle', label: 'Smooth by angle' },
+          { value: 'smooth', label: 'Smooth' },
+          { value: 'flat', label: 'Flat' },
+        ]}
+        onChange={(v) => setSlice('geometry', { shading: v })} />
+      {g.shading === 'angle' && (
+        <Slider label="Smooth angle" value={g.shadingAngle} min={10} max={180} step={1} unit="°"
+          onChange={(v) => setSlice('geometry', { shadingAngle: v })} />
+      )}
       <Select label="Shape combine" value={g.combine}
         options={[
           { value: 'union', label: 'Union into one solid' },

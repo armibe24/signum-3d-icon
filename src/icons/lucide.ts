@@ -1,10 +1,16 @@
 /* ============================================================
-   Lucide icon catalog — sourced from the `lucide` npm package
-   (ISC licensed, bundled locally, no network / paid API).
+   Lucide icon registry — the single source of truth for icon
+   search and lookup, sourced from the `lucide` npm package (ISC
+   licensed, bundled locally, no network / paid API).
 
-   Each icon ships as an IconNode: a tree of [tag, attrs,
-   children?] tuples. We serialize that back into standalone SVG
-   markup both for grid previews and for the 3D pipeline.
+   The searchable index is built ONCE at module load from the
+   complete `icons` export — it is completely independent of what
+   the browser grid currently renders, so search always covers
+   every icon. Lookup is hyphen/case-insensitive.
+
+   Each icon ships as an IconNode: ["svg", attrs, children]. We
+   serialize that back into standalone SVG markup both for grid
+   previews / UI chrome and for the 3D pipeline.
    ============================================================ */
 
 import { icons } from 'lucide'
@@ -44,6 +50,13 @@ for (const key of Object.keys(icons)) {
 catalog.sort((a, b) => a.id.localeCompare(b.id))
 
 const byId = new Map(catalog.map((e) => [flat(e.id), e]))
+
+// debug-safe sanity check: makes it obvious how many icons are indexed
+// (the lucide `icons` export contains only icon data, so no filtering is
+// needed — every key is a real icon or an alias of one)
+if (import.meta.env.DEV) {
+  console.info(`[signum] lucide registry: ${catalog.length} icons indexed for search`)
+}
 
 export function allIcons(): IconEntry[] {
   return catalog
