@@ -16,6 +16,7 @@
 import { bufferPolyline } from '../svg/outline'
 import { unionPolygons, unionRings } from '../svg/boolean'
 import { normalizeParts } from '../svg/normalize'
+import { cleanMultiPolygon } from '../svg/clean'
 import type { MultiPolygon, PolygonWithHoles } from '../types'
 import type { SvgWorkerRequest, SvgWorkerResponse } from '../svg/types'
 
@@ -85,6 +86,15 @@ self.onmessage = (ev: MessageEvent<SvgWorkerRequest>) => {
     } else {
       parts = elements
     }
+
+    // ---- cleanup: strip union debris before triangulation -------------
+    // (collinear chains, stair-step notches, dust/sliver rings — the
+    // source of "weird points" and banded walls in the extrusion)
+    const cleanEps = extent * 0.0011
+    const minArea = Math.pow(extent * 0.004, 2)
+    parts = parts
+      .map((part) => cleanMultiPolygon(part, cleanEps, minArea))
+      .filter((part) => part.length > 0)
 
     if (parts.length === 0) {
       throw new Error('The icon produced no usable geometry.')

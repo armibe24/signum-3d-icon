@@ -32,6 +32,10 @@ function wireEngine() {
   })
   geometryBuilder.start()
 
+  sceneManager.onZoomChange = (pct) => {
+    if (store.get().zoomPct !== pct) store.setTransient({ zoomPct: pct })
+  }
+
   // apply non-geometry settings imperatively whenever their slice changes
   let prev = store.get().settings
   const applyAll = (s = store.get().settings) => {

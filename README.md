@@ -39,7 +39,9 @@ Signum instead runs a conversion pipeline:
    choice). Built on `polygon-clipping`, isolated behind a small wrapper so the backend can be
    swapped. Three-stage fallback: one-shot sweep → incremental union skipping bad pieces → raw
    pieces, each stage reporting a warning instead of throwing. Broken geometry is never produced
-   silently.
+   silently. A cleanup pass (`src/svg/clean.ts`) then strips union debris — collinear point
+   chains, near-tangent stair-steps, dust and hairline sliver rings — so the extrusion gets
+   smooth, minimal outlines (the fix for spiky/banded walls).
 4. **Normalize** (`src/svg/normalize.ts`): y-flip to y-up, center on origin, rescale so every icon
    spans the same normalized size (so depth/bevel sliders behave consistently).
 5. **Extrude** (`src/geometry/extrude.ts`, main thread): polygons → `THREE.Shape`s with holes →
@@ -109,7 +111,8 @@ export, so exported frames match the preview exactly and a keyframe timeline can
   intensities; key light azimuth/elevation; shadows + soft shadows.
 - **Animation**: static, spin X/Y, turntable, slow turn, wobble, floating wobble, reveal
   (start→end rotation), bounce-in; duration, FPS, loop, speed/turns, direction, easing,
-  start/end rotation; play/pause; timeline with scrubbing, frame counter, time readout.
+  start/end rotation; play/pause (preview never autoplays); Sonitus-style timeline with
+  transport cluster, frame stepping, scrubbing, frame counter and time readout.
 - **Export**: PNG (alpha) / JPG / WebP stills at 512/1024/2048/custom; PNG sequence (ZIP, alpha),
   GIF (1-bit alpha), MP4 (H.264 via WebCodecs), WebM (VP9); deterministic frame timing; progress
   bar + cancel; UI stays responsive during export.

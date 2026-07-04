@@ -27,6 +27,27 @@ export interface ToastState {
   kind: 'info' | 'error'
 }
 
+/** persisted UI preferences (localStorage, not part of presets/undo) */
+export interface UiPrefs {
+  showHint: boolean
+  /** 'auto' = device pixel ratio (max 2), '1' = performance */
+  pixelRatio: 'auto' | '1'
+}
+
+const PREFS_KEY = 'signum.prefs'
+
+function loadPrefs(): UiPrefs {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') as Partial<UiPrefs>
+    return {
+      showHint: typeof raw.showHint === 'boolean' ? raw.showHint : true,
+      pixelRatio: raw.pixelRatio === '1' ? '1' : 'auto',
+    }
+  } catch {
+    return { showHint: true, pixelRatio: 'auto' }
+  }
+}
+
 export interface AppState {
   settings: AppSettings
   /** playhead, seconds */
@@ -40,6 +61,9 @@ export interface AppState {
   toast: ToastState | null
   /** sidebar section that should open + scroll into view */
   openSection: string | null
+  /** viewport camera zoom relative to the default distance, percent */
+  zoomPct: number
+  prefs: UiPrefs
   canUndo: boolean
   canRedo: boolean
 }
@@ -49,12 +73,15 @@ const HISTORY_LIMIT = 100
 let state: AppState = {
   settings: defaultSettings(),
   time: 0,
-  playing: true,
+  // preview never autoplays — the user starts playback explicitly
+  playing: false,
   processing: false,
   warnings: [],
   exportJob: null,
   toast: null,
   openSection: null,
+  zoomPct: 100,
+  prefs: loadPrefs(),
   canUndo: false,
   canRedo: false,
 }
@@ -157,6 +184,17 @@ export const store = {
 
   requestSection(id: string) {
     state = { ...state, openSection: id }
+    emit()
+  },
+
+  setPrefs(patch: Partial<UiPrefs>) {
+    const prefs = { ...state.prefs, ...patch }
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify(prefs))
+    } catch {
+      /* private mode — prefs just don't persist */
+    }
+    state = { ...state, prefs }
     emit()
   },
 }

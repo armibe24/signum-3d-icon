@@ -6,7 +6,6 @@ import { LightingControls } from './LightingControls'
 import { BackgroundControls } from './BackgroundControls'
 import { AnimationControls } from './AnimationControls'
 import { ExportPanel } from './ExportPanel'
-import { PresetControls } from './PresetControls'
 
 export function Sidebar() {
   return (
@@ -31,9 +30,6 @@ export function Sidebar() {
       </Section>
       <Section id="export" title="Export">
         <ExportPanel />
-      </Section>
-      <Section id="presets" title="Presets">
-        <PresetControls />
       </Section>
     </aside>
   )

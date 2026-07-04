@@ -49,6 +49,8 @@ export class SceneManager {
 
   /** callbacks the app wires up */
   onFrame: ((dt: number) => void) | null = null
+  /** fires with the camera zoom (percent of default distance) on orbit */
+  onZoomChange: ((pct: number) => void) | null = null
 
   gridVisible = false
   private userScale = 1
@@ -102,6 +104,8 @@ export class SceneManager {
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement)
     if (this.camera.position.lengthSq() < 1e-6) this.resetCamera()
+    this.controls.addEventListener('change', () => this.reportZoom())
+    this.reportZoom()
     this.controls.enableDamping = true
     this.controls.dampingFactor = 0.08
     this.controls.minDistance = 0.6
@@ -203,6 +207,20 @@ export class SceneManager {
 
   setAutoRotate(on: boolean): void {
     if (this.controls) this.controls.autoRotate = on
+  }
+
+  /** cap render resolution — 'auto' follows the device (max 2×) */
+  setPixelRatioMode(mode: 'auto' | '1'): void {
+    if (!this.renderer) return
+    this.renderer.setPixelRatio(mode === '1' ? 1 : Math.min(window.devicePixelRatio, 2))
+    this.resize()
+  }
+
+  private reportZoom(): void {
+    if (!this.controls || !this.onZoomChange) return
+    const defaultDist = new THREE.Vector3(1.4, 1.1, 3.9).length()
+    const dist = this.camera.position.distanceTo(this.controls.target)
+    this.onZoomChange(Math.round((defaultDist / Math.max(dist, 1e-4)) * 100))
   }
 
   /* ---------------- animation pose ---------------- */

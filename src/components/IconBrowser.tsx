@@ -93,7 +93,9 @@ export function IconBrowser() {
 
       <div className="icon-meta">
         <span>
-          {results.length > shown.length ? `${shown.length} of ${results.length}` : `${results.length}`} icons
+          {query.trim()
+            ? `${results.length} match${results.length === 1 ? '' : 'es'}`
+            : `all ${results.length} searchable`}
         </span>
         <b>{icon.type === 'custom' ? `custom: ${icon.name}` : icon.name}</b>
       </div>

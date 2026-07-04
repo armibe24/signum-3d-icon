@@ -1,13 +1,42 @@
+/* Top bar — Sonitus-style: brand on the left, then icon-only action
+   groups separated by divider lines, settings + about on the right.
+   Every button has a tooltip + aria-label since there are no text
+   labels. */
+
 import { useState } from 'react'
 import { store, useStore } from '../store/store'
 import { savePresetFile, loadPresetFile, resetProject } from './PresetControls'
 import { AboutModal } from './AboutModal'
+import { SettingsModal } from './SettingsModal'
 import { Icon } from './common/Icon'
+
+interface Action {
+  icon: string
+  label: string
+  onClick: () => void
+  disabled?: boolean
+}
+
+function IconAction({ icon, label, onClick, disabled }: Action) {
+  return (
+    <button
+      type="button"
+      className="iconbtn"
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+    >
+      <Icon name={icon} size={14} strokeWidth={2} />
+    </button>
+  )
+}
 
 export function TopBar() {
   const canUndo = useStore((s) => s.canUndo)
   const canRedo = useStore((s) => s.canRedo)
   const [showAbout, setShowAbout] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   return (
     <header className="topbar">
@@ -15,42 +44,35 @@ export function TopBar() {
         <span className="topbar-logo">
           <Icon name="box" size={20} strokeWidth={2} />
         </span>
-        SIGNUM <span className="sub">3D ICON STUDIO</span>
+        SIGNUM
       </div>
 
       <div className="topbar-sep" />
       <div className="topbar-group">
-        <button type="button" className="topbtn" onClick={resetProject} title="New project — resets all settings">
-          <Icon name="file-plus-2" size={12} strokeWidth={2.2} />
-          New
-        </button>
-        <button type="button" className="iconbtn" disabled={!canUndo} onClick={() => store.undo()} title="Undo (Ctrl+Z)">
-          <Icon name="undo-2" size={14} strokeWidth={2.2} />
-        </button>
-        <button type="button" className="iconbtn" disabled={!canRedo} onClick={() => store.redo()} title="Redo (Ctrl+Shift+Z)">
-          <Icon name="redo-2" size={14} strokeWidth={2.2} />
-        </button>
+        <IconAction icon="file-plus-2" label="New project (reset all)" onClick={resetProject} />
+        <IconAction icon="folder-open" label="Load preset…" onClick={loadPresetFile} />
       </div>
 
       <div className="topbar-sep" />
       <div className="topbar-group">
-        <button type="button" className="topbtn" onClick={savePresetFile} title="Save all settings as a JSON preset">
-          <Icon name="save" size={12} strokeWidth={2.2} />
-          Save preset
-        </button>
-        <button type="button" className="topbtn" onClick={loadPresetFile} title="Load a JSON preset">
-          <Icon name="folder-open" size={12} strokeWidth={2.2} />
-          Load preset
-        </button>
+        <IconAction icon="save" label="Save preset" onClick={savePresetFile} />
+      </div>
+
+      <div className="topbar-sep" />
+      <div className="topbar-group">
+        <IconAction icon="undo-2" label="Undo (Ctrl+Z)" onClick={() => store.undo()} disabled={!canUndo} />
+        <IconAction icon="redo-2" label="Redo (Ctrl+Shift+Z)" onClick={() => store.redo()} disabled={!canRedo} />
       </div>
 
       <div className="topbar-spacer" />
 
-      <button type="button" className="iconbtn" onClick={() => setShowAbout(true)} title="About & shortcuts">
-        <Icon name="info" size={14} strokeWidth={2.2} />
-      </button>
+      <div className="topbar-group">
+        <IconAction icon="settings" label="Settings" onClick={() => setShowSettings(true)} />
+        <IconAction icon="info" label="About & shortcuts" onClick={() => setShowAbout(true)} />
+      </div>
 
       {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </header>
   )
 }

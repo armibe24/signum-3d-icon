@@ -72,6 +72,8 @@ export function Timeline() {
   return (
     <div className="timeline">
       <div className="timeline-controls">
+        {/* transport cluster — reference order:
+            jump start · step back · play · step forward · jump end · loop */}
         <div className="tl-group tl-group--left">
           <div className="tl-transport">
             <button type="button" className="iconbtn" title="Jump to start"
@@ -81,6 +83,14 @@ export function Timeline() {
             <button type="button" className="iconbtn" title="Previous frame"
               onClick={() => stepFrame(-1)}>
               <Icon name="chevron-left" size={13} strokeWidth={2.4} />
+            </button>
+            <button
+              type="button"
+              className="tl-play"
+              title="Play / pause (Space)"
+              onClick={() => store.setTransient({ playing: !playing })}
+            >
+              <Icon name={playing ? 'pause' : 'play'} size={13} strokeWidth={2.6} />
             </button>
             <button type="button" className="iconbtn" title="Next frame"
               onClick={() => stepFrame(1)}>
@@ -99,18 +109,9 @@ export function Timeline() {
               <Icon name="repeat" size={12} strokeWidth={2.2} />
             </button>
           </div>
-          <span className={`tl-workdot${processing ? ' on' : ''}`} />
         </div>
 
         <div className="tl-group tl-group--center">
-          <button
-            type="button"
-            className="tl-play"
-            title="Play / pause (Space)"
-            onClick={() => store.setTransient({ playing: !playing })}
-          >
-            <Icon name={playing ? 'pause' : 'play'} size={13} strokeWidth={2.6} />
-          </button>
           <span className="tl-counter">
             {String(frame).padStart(3, '0')}
             <span> / {String(totalFrames).padStart(3, '0')}</span>
@@ -118,9 +119,6 @@ export function Timeline() {
           <span className="tl-counter">
             {t.toFixed(2)}s<span className="tl-time"> / {anim.duration.toFixed(2)}s</span>
           </span>
-        </div>
-
-        <div className="tl-group tl-group--right">
           <label className="tl-field">
             FPS
             <NumField value={anim.fps} min={1} max={60} step={1}
@@ -132,6 +130,10 @@ export function Timeline() {
               onChange={(v) => setSlice('animation', { duration: v })} />
             <span>s</span>
           </label>
+        </div>
+
+        <div className="tl-group tl-group--right">
+          <span className={`tl-workdot${processing ? ' on' : ''}`} />
         </div>
       </div>
 

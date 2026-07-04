@@ -1,7 +1,8 @@
-/* Preset section — save/load the full parameter state as JSON.
-   Camera state is captured live from the engine on save. */
+/* Preset actions — save/load the full parameter state as JSON and
+   project reset. Triggered from the top bar (no sidebar duplicates);
+   camera state is captured live from the engine on save. */
 
-import { store, useStore } from '../store/store'
+import { store } from '../store/store'
 import { parsePreset, serializePreset } from '../utils/presets'
 import { downloadBlob, pickFile, readFileText, safeFileName } from '../utils/file'
 import { sceneManager } from '../engine/SceneManager'
@@ -31,35 +32,7 @@ export function resetProject(): void {
   const fresh = defaultSettings()
   store.replaceSettings(fresh)
   sceneManager.setCameraState(fresh.camera)
-  store.setTransient({ time: 0 })
+  store.setTransient({ time: 0, playing: false })
   store.toast('New project')
 }
 
-export function PresetControls() {
-  const iconName = useStore((s) => s.settings.icon.name)
-
-  return (
-    <div className="side-rows">
-      <div className="export-btns">
-        <button type="button" className="btn btn--sm" onClick={savePresetFile}>
-          Save preset
-        </button>
-        <button type="button" className="btn btn--sm" onClick={loadPresetFile}>
-          Load preset
-        </button>
-      </div>
-      <p className="export-note">
-        Presets store every parameter — icon (<b>{iconName}</b>), geometry, material, lighting,
-        background, animation, camera and export settings — as a portable JSON file.
-      </p>
-      <button
-        type="button"
-        className="btn btn--sm"
-        style={{ justifyContent: 'center' }}
-        onClick={resetProject}
-      >
-        New project / reset all
-      </button>
-    </div>
-  )
-}
