@@ -76,10 +76,21 @@ function wireEngine() {
   }
 }
 
+/**
+ * True only for elements where typing/shortcut keys belong to the element
+ * itself. Range sliders, checkboxes and buttons are NOT typing targets —
+ * they keep focus after a click, and undo must still work then.
+ */
 function isTypingTarget(el: EventTarget | null): boolean {
   if (!(el instanceof HTMLElement)) return false
+  if (el.isContentEditable) return true
   const tag = el.tagName
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable
+  if (tag === 'TEXTAREA' || tag === 'SELECT') return true
+  if (tag === 'INPUT') {
+    const type = (el as HTMLInputElement).type
+    return !['range', 'checkbox', 'radio', 'button', 'submit', 'reset'].includes(type)
+  }
+  return false
 }
 
 export default function App() {

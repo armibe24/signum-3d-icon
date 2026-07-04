@@ -5,8 +5,7 @@
    vertex along its corner bisector ("getBevelVec") with no
    self-intersection handling. At acute corners the offset grows
    by 1/sin(θ/2) and vertices cross over, folding the cap
-   triangulation into the overlapping/flipped planes seen with
-   stroke-outlined icons. No parameter clamp can fix that.
+   triangulation into overlapping/flipped planes.
 
    Here every bevel ring is a *robustly eroded polygon* computed
    with boolean ops in the worker, and the mesh is assembled from
@@ -17,21 +16,29 @@
    - walls: quads along the exact base outline (silhouette is
      preserved — the bevel cuts inward, never inflates)
    - bevel band k: the 2D annulus between erosion level k and k+1,
-     triangulated flat, then each vertex lifted to its ring's z
-     (outer boundary → z_k, inner boundary → z_{k+1}) — this works
-     even when erosion splits or consumes thin features, which
-     simply receive lower rounded tops
-   - caps: the deepest erosion level, triangulated at ±depth/2
+     triangulated flat, then each vertex lifted to its ring's z —
+     this works even when erosion splits or consumes thin features
+   - caps: ONLY the deepest erosion level (no full-size face hides
+     underneath the bevel), triangulated at ±depth/2
 
    Every surface is emitted exactly once → no duplicate/coplanar
-   faces, no z-fighting, no folds, no spikes. Degenerate rings are
-   dropped before triangulation and failures are counted so the
-   caller can warn instead of silently rendering broken output.
+   faces, no z-fighting, no folds, no spikes.
+
+   NORMALS are assigned analytically per surface group instead of
+   a global computeVertexNormals/crease pass, so smoothing can
+   never bleed across the wrong seams:
+   - caps are always exactly flat (0,0,±1)
+   - side walls use the 2D outline normal, smoothed along the loop
+     only where the corner angle is below the shading threshold
+   - bevel bands use the true profile normal
+     n = n2d·cos(θ) + ẑ·sin(θ), which makes a rounded bevel
+     G1-continuous with both the wall (θ=0) and the cap (θ=90°) —
+     no triangulation-dependent streaks
+   - "flat" shading bypasses all of this with per-face normals
    ============================================================ */
 
 import * as THREE from 'three'
-import { mergeVertices, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js'
-import type { BevelPartData, GeometrySettings, MultiPolygon, Ring, ShadingMode } from '../types'
+import type { BevelPartData, GeometrySettings, MultiPolygon, Ring } from '../types'
 import { NORMALIZED_SIZE } from '../svg/normalize'
 
 const WELD_EPS = 1e-4
@@ -90,104 +97,233 @@ function orientPolygons(mp: MultiPolygon): MultiPolygon {
   return out
 }
 
+function coordKey(x: number, y: number): string {
+  return `${x.toFixed(6)}|${y.toFixed(6)}`
+}
+
 /* ------------------------------------------------------------------ */
-/* surface emitters (positions only, non-indexed)                      */
+/* 2D outline normals (shared by walls and bevel bands)                */
+/* ------------------------------------------------------------------ */
+
+type Vec2 = [number, number]
+
+/**
+ * Per-edge outward normals of a ring, plus per-vertex normals smoothed
+ * only where the corner between adjacent edges is below `cosThreshold`.
+ * With CCW exteriors / CW holes, (dy, -dx) always points away from the
+ * solid — into open space for exteriors, into the hole for holes.
+ */
+function ringNormals(ring: Ring, cosThreshold: number) {
+  const n = ring.length
+  const edge: Vec2[] = new Array(n)
+  for (let i = 0; i < n; i++) {
+    const [ax, ay] = ring[i]
+    const [bx, by] = ring[(i + 1) % n]
+    const dx = bx - ax
+    const dy = by - ay
+    const len = Math.hypot(dx, dy) || 1
+    edge[i] = [dy / len, -dx / len]
+  }
+  const smooth: (Vec2 | null)[] = new Array(n)
+  for (let i = 0; i < n; i++) {
+    const prev = edge[(i - 1 + n) % n]
+    const next = edge[i]
+    const dot = prev[0] * next[0] + prev[1] * next[1]
+    if (dot >= cosThreshold) {
+      const sx = prev[0] + next[0]
+      const sy = prev[1] + next[1]
+      const len = Math.hypot(sx, sy) || 1
+      smooth[i] = [sx / len, sy / len]
+    } else {
+      smooth[i] = null // hard corner — each adjacent face keeps its edge normal
+    }
+  }
+  return { edge, smooth }
+}
+
+/** coordKey → averaged outline normal for every vertex of a level. */
+function levelNormalMap(mp: MultiPolygon, cosThreshold: number): Map<string, Vec2> {
+  const map = new Map<string, Vec2>()
+  for (const poly of orientPolygons(mp)) {
+    for (const ring of poly) {
+      const { edge, smooth } = ringNormals(ring, cosThreshold)
+      const n = ring.length
+      for (let i = 0; i < n; i++) {
+        // bands need ONE normal per vertex; at hard corners fall back to
+        // the bisector average (a hair of corner softening, never a streak)
+        let v = smooth[i]
+        if (!v) {
+          const prev = edge[(i - 1 + n) % n]
+          const next = edge[i]
+          const sx = prev[0] + next[0]
+          const sy = prev[1] + next[1]
+          const len = Math.hypot(sx, sy) || 1
+          v = [sx / len, sy / len]
+        }
+        map.set(coordKey(ring[i][0], ring[i][1]), v)
+      }
+    }
+  }
+  return map
+}
+
+/* ------------------------------------------------------------------ */
+/* mesh sink                                                           */
 /* ------------------------------------------------------------------ */
 
 class MeshSink {
   positions: number[] = []
+  normals: number[] = []
   failedFaces = 0
 
-  tri(ax: number, ay: number, az: number, bx: number, by: number, bz: number, cx: number, cy: number, cz: number) {
+  tri(
+    ax: number, ay: number, az: number, an: [number, number, number],
+    bx: number, by: number, bz: number, bn: [number, number, number],
+    cx: number, cy: number, cz: number, cn: [number, number, number],
+  ) {
     this.positions.push(ax, ay, az, bx, by, bz, cx, cy, cz)
+    this.normals.push(...an, ...bn, ...cn)
   }
 }
 
-/** Flat cap at a single z. `flip` reverses winding (back faces). */
-function emitCap(sink: MeshSink, mp: MultiPolygon, z: number, flip: boolean) {
+interface TriangulatedPoly {
+  verts: THREE.Vector2[]
+  faces: number[][]
+}
+
+function triangulate(mp: MultiPolygon, sink: MeshSink): TriangulatedPoly[] {
+  const out: TriangulatedPoly[] = []
   for (const poly of orientPolygons(mp)) {
     const contour = poly[0].map(([x, y]) => new THREE.Vector2(x, y))
     const holes = poly.slice(1).map((r) => r.map(([x, y]) => new THREE.Vector2(x, y)))
-    let faces: number[][]
     try {
-      faces = THREE.ShapeUtils.triangulateShape(contour, holes)
+      out.push({ verts: [contour, ...holes].flat(), faces: THREE.ShapeUtils.triangulateShape(contour, holes) })
     } catch {
       sink.failedFaces++
-      continue
     }
-    const verts = [contour, ...holes].flat()
+  }
+  return out
+}
+
+/* ------------------------------------------------------------------ */
+/* surface emitters                                                    */
+/* ------------------------------------------------------------------ */
+
+/** Flat cap at a single z — normal is exactly ±ẑ, never smoothed. */
+function emitCap(sink: MeshSink, mp: MultiPolygon, z: number, flip: boolean) {
+  const nz: [number, number, number] = [0, 0, flip ? -1 : 1]
+  for (const { verts, faces } of triangulate(mp, sink)) {
     for (const [a, b, c] of faces) {
       const A = verts[a], B = verts[b], C = verts[c]
       if (!A || !B || !C) continue
-      if (flip) sink.tri(A.x, A.y, z, C.x, C.y, z, B.x, B.y, z)
-      else sink.tri(A.x, A.y, z, B.x, B.y, z, C.x, C.y, z)
+      if (flip) sink.tri(A.x, A.y, z, nz, C.x, C.y, z, nz, B.x, B.y, z, nz)
+      else sink.tri(A.x, A.y, z, nz, B.x, B.y, z, nz, C.x, C.y, z, nz)
     }
   }
 }
 
+interface BandShading {
+  /** coordKey → outline normal, for outer and inner boundary levels */
+  outerMap: Map<string, Vec2>
+  innerMap: Map<string, Vec2>
+  innerSet: Set<string>
+  /** profile normal elevation (radians) at outer / inner boundary */
+  elevOuter: number
+  elevInner: number
+  /** true → ignore analytic normals, use per-face (flat facets) */
+  faceted: boolean
+}
+
 /**
- * Bevel band: the annulus between two erosion levels, triangulated in 2D,
- * with each vertex lifted to the z of the ring it lies on. Vertices belonging
- * to the inner (deeper-eroded) boundary are recognized by exact coordinate
- * membership — boolean difference reuses input coordinates verbatim.
+ * Bevel band: the 2D annulus between two erosion levels, each vertex
+ * lifted to its ring's z. Normals come from the bevel profile: at
+ * elevation θ the surface normal is n2d·cosθ + ẑ·sinθ, which matches the
+ * wall exactly at θ=0 and the cap exactly at θ=90° — seamless rounding.
  */
 function emitBand(
   sink: MeshSink,
   band: MultiPolygon,
-  innerSet: Set<string>,
   zOuter: number,
   zInner: number,
+  shading: BandShading,
   flip: boolean,
 ) {
-  const zOf = (v: THREE.Vector2) => (innerSet.has(coordKey(v.x, v.y)) ? zInner : zOuter)
-  for (const poly of orientPolygons(band)) {
-    const contour = poly[0].map(([x, y]) => new THREE.Vector2(x, y))
-    const holes = poly.slice(1).map((r) => r.map(([x, y]) => new THREE.Vector2(x, y)))
-    let faces: number[][]
-    try {
-      faces = THREE.ShapeUtils.triangulateShape(contour, holes)
-    } catch {
-      sink.failedFaces++
-      continue
-    }
-    const verts = [contour, ...holes].flat()
+  const zSign = flip ? -1 : 1
+
+  const vertexData = (v: THREE.Vector2): { z: number; n: [number, number, number] } => {
+    const key = coordKey(v.x, v.y)
+    const inner = shading.innerSet.has(key)
+    const z = inner ? zInner : zOuter
+    const n2d = (inner ? shading.innerMap.get(key) : shading.outerMap.get(key)) ?? [0, 0]
+    const elev = inner ? shading.elevInner : shading.elevOuter
+    const cos = Math.cos(elev)
+    const sin = Math.sin(elev)
+    return { z, n: [n2d[0] * cos, n2d[1] * cos, sin * zSign] }
+  }
+
+  for (const { verts, faces } of triangulate(band, sink)) {
     for (const [a, b, c] of faces) {
       const A = verts[a], B = verts[b], C = verts[c]
       if (!A || !B || !C) continue
-      if (flip) sink.tri(A.x, A.y, zOf(A), C.x, C.y, zOf(C), B.x, B.y, zOf(B))
-      else sink.tri(A.x, A.y, zOf(A), B.x, B.y, zOf(B), C.x, C.y, zOf(C))
-    }
-  }
-}
+      const dA = vertexData(A)
+      const dB = vertexData(B)
+      const dC = vertexData(C)
 
-/** Straight side walls along every ring of the base outline. */
-function emitWalls(sink: MeshSink, mp: MultiPolygon, z0: number, z1: number) {
-  for (const poly of orientPolygons(mp)) {
-    for (const ring of poly) {
-      for (let i = 0; i < ring.length; i++) {
-        const [ax, ay] = ring[i]
-        const [bx, by] = ring[(i + 1) % ring.length]
-        // CCW exterior / CW holes both yield outward-facing walls here
-        sink.tri(ax, ay, z0, bx, by, z0, bx, by, z1)
-        sink.tri(ax, ay, z0, bx, by, z1, ax, ay, z1)
+      // plateau triangles (thin feature consumed by erosion) are truly
+      // horizontal — give them their real flat normal
+      const flatTri = dA.z === dB.z && dB.z === dC.z
+      if (shading.faceted || flatTri) {
+        const ux = B.x - A.x, uy = B.y - A.y, uz = dB.z - dA.z
+        const vx = C.x - A.x, vy = C.y - A.y, vz = dC.z - dA.z
+        let nx = uy * vz - uz * vy
+        let ny = uz * vx - ux * vz
+        let nzc = ux * vy - uy * vx
+        const len = Math.hypot(nx, ny, nzc) || 1
+        // face normal follows front winding; mirror for the back side
+        nx /= len; ny /= len; nzc /= len
+        const fn: [number, number, number] = flip ? [nx, ny, -nzc] : [nx, ny, nzc]
+        dA.n = fn; dB.n = fn; dC.n = fn
+      }
+
+      if (flip) {
+        sink.tri(A.x, A.y, -dA.z, dA.n, C.x, C.y, -dC.z, dC.n, B.x, B.y, -dB.z, dB.n)
+      } else {
+        sink.tri(A.x, A.y, dA.z, dA.n, B.x, B.y, dB.z, dB.n, C.x, C.y, dC.z, dC.n)
       }
     }
   }
 }
 
-function coordKey(x: number, y: number): string {
-  return `${x.toFixed(6)}|${y.toFixed(6)}`
+/** Straight side walls, loop-smoothed by the shading threshold. */
+function emitWalls(sink: MeshSink, mp: MultiPolygon, z0: number, z1: number, cosThreshold: number) {
+  for (const poly of orientPolygons(mp)) {
+    for (const ring of poly) {
+      const { edge, smooth } = ringNormals(ring, cosThreshold)
+      const n = ring.length
+      for (let i = 0; i < n; i++) {
+        const [ax, ay] = ring[i]
+        const [bx, by] = ring[(i + 1) % n]
+        const en = edge[i]
+        const na2 = smooth[i] ?? en
+        const nb2 = smooth[(i + 1) % n] ?? en
+        const na: [number, number, number] = [na2[0], na2[1], 0]
+        const nb: [number, number, number] = [nb2[0], nb2[1], 0]
+        sink.tri(ax, ay, z0, na, bx, by, z0, nb, bx, by, z1, nb)
+        sink.tri(ax, ay, z0, na, bx, by, z1, nb, ax, ay, z1, na)
+      }
+    }
+  }
 }
+
+/* ------------------------------------------------------------------ */
+/* part assembly                                                       */
+/* ------------------------------------------------------------------ */
 
 function vertexSet(mp: MultiPolygon): Set<string> {
   const set = new Set<string>()
   for (const poly of mp) for (const ring of poly) for (const [x, y] of ring) set.add(coordKey(x, y))
   return set
 }
-
-/* ------------------------------------------------------------------ */
-/* part assembly                                                       */
-/* ------------------------------------------------------------------ */
 
 /** z of bevel step k (0 = wall top … S = cap plane) for half-depth h2 */
 function stepZ(style: GeometrySettings['bevelStyle'], b: number, S: number, k: number, h2: number): number {
@@ -196,13 +332,19 @@ function stepZ(style: GeometrySettings['bevelStyle'], b: number, S: number, k: n
   return h2 - b + b * Math.sin(((k / S) * Math.PI) / 2)
 }
 
-function emitPart(sink: MeshSink, part: BevelPartData, g: GeometrySettings, zScale: number) {
+/** profile normal elevation at step k */
+function stepElevation(style: GeometrySettings['bevelStyle'], S: number, k: number): number {
+  if (style === 'hard') return Math.PI / 4 // 45° chamfer, constant across the strip
+  return ((k / S) * Math.PI) / 2
+}
+
+function emitPart(sink: MeshSink, part: BevelPartData, g: GeometrySettings, zScale: number, cosThreshold: number, faceted: boolean) {
   const h2 = (Math.max(g.extrudeDepth, 0.1) / 2) * zScale
   const S = part.levels.length
   const b = S > 0 ? part.bevel * zScale : 0
   const wallTop = h2 - b
 
-  emitWalls(sink, part.base, -wallTop, wallTop)
+  emitWalls(sink, part.base, -wallTop, wallTop, cosThreshold)
 
   if (S === 0) {
     emitCap(sink, part.base, h2, false)
@@ -211,45 +353,25 @@ function emitPart(sink: MeshSink, part: BevelPartData, g: GeometrySettings, zSca
   }
 
   const seq: MultiPolygon[] = [part.base, ...part.levels]
+  const maps = seq.map((level) => levelNormalMap(level, cosThreshold))
   for (let k = 0; k < S; k++) {
-    const innerSet = vertexSet(seq[k + 1])
+    const shading: BandShading = {
+      outerMap: maps[k],
+      innerMap: maps[k + 1],
+      innerSet: vertexSet(seq[k + 1]),
+      elevOuter: stepElevation(g.bevelStyle, S, k),
+      elevInner: stepElevation(g.bevelStyle, S, k + 1),
+      faceted,
+    }
     const zo = stepZ(g.bevelStyle, b, S, k, h2)
     const zi = stepZ(g.bevelStyle, b, S, k + 1, h2)
-    emitBand(sink, part.bands[k], innerSet, zo, zi, false)
-    emitBand(sink, part.bands[k], innerSet, -zo, -zi, true)
+    emitBand(sink, part.bands[k], zo, zi, shading, false)
+    emitBand(sink, part.bands[k], zo, zi, shading, true)
   }
 
   const cap = part.levels[S - 1]
   emitCap(sink, cap, h2, false)
   emitCap(sink, cap, -h2, true)
-}
-
-/* ------------------------------------------------------------------ */
-/* shading                                                             */
-/* ------------------------------------------------------------------ */
-
-/**
- * Normal generation, applied AFTER assembly (no geometry rebuild needed
- * beyond re-running this stage):
- * - flat: per-face normals (crisp facets)
- * - smooth: weld everything, average normals across all edges
- * - angle: smooth only edges flatter than the threshold (silhouette
- *   edges stay hard) via toCreasedNormals
- */
-function applyShading(geo: THREE.BufferGeometry, mode: ShadingMode, angleDeg: number): THREE.BufferGeometry {
-  if (mode === 'flat') {
-    geo.computeVertexNormals() // non-indexed → face normals
-    return geo
-  }
-  if (mode === 'smooth') {
-    const merged = mergeVertices(geo, WELD_EPS)
-    merged.computeVertexNormals()
-    geo.dispose()
-    return merged
-  }
-  const creased = toCreasedNormals(geo, THREE.MathUtils.degToRad(Math.min(Math.max(angleDeg, 1), 180)))
-  if (creased !== geo) geo.dispose()
-  return creased
 }
 
 /* ------------------------------------------------------------------ */
@@ -259,10 +381,22 @@ function applyShading(geo: THREE.BufferGeometry, mode: ShadingMode, angleDeg: nu
 export function assembleIconGeometry(parts: BevelPartData[], g: GeometrySettings): AssembledGeometry {
   const sink = new MeshSink()
 
+  // shading configuration
+  // - flat: per-face normals everywhere
+  // - smooth: analytic normals, loop smoothing always on (threshold 180°)
+  // - angle: analytic normals, loop smoothing below the threshold; bands
+  //   fall back to flat facets when the threshold is tighter than one
+  //   bevel segment step (so a low angle really does facet the bevel)
+  const flatMode = g.shading === 'flat'
+  const thresholdDeg = g.shading === 'smooth' ? 180 : Math.min(Math.max(g.shadingAngle, 0), 180)
+  const cosThreshold = Math.cos(THREE.MathUtils.degToRad(thresholdDeg))
+  const segmentStepDeg = g.bevelStyle === 'rounded' ? 90 / Math.max(g.bevelSegments, 1) : 45
+  const facetedBands = flatMode || (g.shading === 'angle' && thresholdDeg < segmentStepDeg)
+
   parts.forEach((part, index) => {
     // tiny per-part depth offset kills z-fighting between coplanar caps
     const zScale = parts.length > 1 ? 1 + index * 0.0015 : 1
-    emitPart(sink, part, g, zScale)
+    emitPart(sink, part, g, zScale, flatMode ? 2 /* dot ≥ 2 is impossible → never smooth */ : cosThreshold, facetedBands)
   })
 
   const warnings: string[] = []
@@ -270,9 +404,13 @@ export function assembleIconGeometry(parts: BevelPartData[], g: GeometrySettings
     warnings.push(`Geometry cleanup skipped ${sink.failedFaces} invalid face group(s).`)
   }
 
-  let geo = new THREE.BufferGeometry()
+  const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.Float32BufferAttribute(sink.positions, 3))
-  geo = applyShading(geo, g.shading, g.shadingAngle)
+  if (flatMode) {
+    geo.computeVertexNormals() // non-indexed soup → true per-face normals
+  } else {
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(sink.normals, 3))
+  }
 
   geo.center()
   const worldScale = 2.4 / NORMALIZED_SIZE

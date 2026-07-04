@@ -89,7 +89,7 @@ export function parsePreset(json: string): AppSettings {
       strokeWidth: num(g.strokeWidth, d.geometry.strokeWidth, 0.2, 4),
       extrudeDepth: num(g.extrudeDepth, d.geometry.extrudeDepth, 1, 60),
       bevelAmount: num(g.bevelAmount, d.geometry.bevelAmount, 0, 10),
-      bevelSegments: Math.round(num(g.bevelSegments, d.geometry.bevelSegments, 2, 8)),
+      bevelSegments: Math.round(num(g.bevelSegments, d.geometry.bevelSegments, 1, 8)),
       bevelStyle: str(g.bevelStyle, ['none', 'hard', 'rounded'] as const, d.geometry.bevelStyle),
       shading: str(g.shading, ['flat', 'smooth', 'angle'] as const, d.geometry.shading),
       shadingAngle: num(g.shadingAngle, d.geometry.shadingAngle, 10, 180),

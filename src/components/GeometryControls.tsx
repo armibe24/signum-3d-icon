@@ -25,7 +25,7 @@ export function GeometryControls() {
       <Slider label="Bevel amount" value={g.bevelAmount} min={0} max={10} step={0.1} decimals={1}
         disabled={g.bevelStyle === 'none'}
         onChange={(v) => setSlice('geometry', { bevelAmount: v })} />
-      <Slider label="Bevel segments" value={g.bevelSegments} min={2} max={8} step={1}
+      <Slider label="Bevel segments" value={g.bevelSegments} min={1} max={8} step={1}
         disabled={g.bevelStyle !== 'rounded' || g.bevelAmount === 0}
         onChange={(v) => setSlice('geometry', { bevelSegments: v })} />
       {bevelWarnings.length > 0 && (

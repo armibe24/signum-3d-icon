@@ -147,7 +147,7 @@ function handleBevel(req: BevelRequest): BevelResponse {
   const { id, parts, style, amount, segments, depth, quality } = req
   const warnings: string[] = []
   const circleSegments = Math.max(CIRCLE_SEGMENTS[quality] - 4, 10)
-  const S = style === 'hard' ? 1 : Math.min(Math.max(Math.round(segments), 2), 8)
+  const S = style === 'hard' ? 1 : Math.min(Math.max(Math.round(segments), 1), 8)
   // cleanup tolerances in normalized units (icon spans NORMALIZED_SIZE)
   const eps = NORMALIZED_SIZE * 0.0006
   const minArea = Math.pow(NORMALIZED_SIZE * 0.004, 2)

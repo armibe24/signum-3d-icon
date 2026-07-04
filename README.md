@@ -53,11 +53,16 @@ Signum instead runs a conversion pipeline:
    bands triangulated between consecutive erosion levels, and caps from the deepest level. Every
    surface is emitted exactly once — no duplicate/coplanar faces, no z-fighting, no folds, no
    spikes; thin features simply receive lower rounded tops. Bevel styles: none / hard (45°
-   chamfer) / rounded (2–8 segments); the amount is clamped to the shape's thinnest feature and
-   reduced or disabled with a visible warning when the shape can't absorb it. Shading modes (flat,
-   smooth, smooth-by-angle with threshold) recompute normals after assembly without re-running the
-   SVG pipeline. Separate parts get a microscopic depth jitter so coplanar caps never z-fight, and
-   geometry that still comes out invalid is rejected with a warning instead of rendered.
+   chamfer) / rounded (1–8 segments); the amount is clamped to the shape's thinnest feature and
+   reduced or disabled with a visible warning when the shape can't absorb it. Normals are assigned
+   **analytically per surface group** (never one global `computeVertexNormals` over the soup):
+   caps are always exactly flat, side walls use the 2D outline normal loop-smoothed by the shading
+   threshold, and bevel bands use the true profile normal `n2d·cosθ + ẑ·sinθ` — which makes a
+   rounded bevel G1-continuous with both the wall and the cap, so smoothing can never bleed across
+   the wrong seams. Shading modes: flat (per-face), smooth, smooth-by-angle with threshold slider
+   (low thresholds visibly facet the bevel). Separate parts get a microscopic depth jitter so
+   coplanar caps never z-fight, and geometry that still comes out invalid is rejected with a
+   warning instead of rendered.
 
 Results are cached at both stages (LRU, `src/geometry/cache.ts`); rebuilds are debounced and
 version-stamped so stale worker replies from fast slider drags are dropped. Material, lighting,
