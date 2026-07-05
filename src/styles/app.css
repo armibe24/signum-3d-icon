@@ -549,6 +549,29 @@ input[type="number"]{-moz-appearance:textfield;appearance:textfield}
 .about-table td{color:var(--ink-soft)}
 .about-table td:nth-child(2){color:var(--sky-blue);font-weight:700;white-space:nowrap}
 
+/* settings: UI style cards */
+.style-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.style-card{display:flex;flex-direction:column;gap:4px;text-align:left;padding:12px 14px;
+  border-radius:var(--radius-med);border:1px solid var(--line-strong);cursor:pointer;
+  background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(15,36,45,.9));
+  box-shadow:var(--gloss-inset);
+  transition:border-color var(--transition-fast),box-shadow var(--transition-fast),background var(--transition-fast)}
+.style-card:hover{border-color:var(--accent)}
+.style-card.selected{border-color:var(--sky-blue);
+  box-shadow:var(--gloss-inset),0 0 14px rgba(var(--sky-blue-rgb),.3)}
+.style-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  font-family:var(--font-mono);font-size:.66rem;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink)}
+.style-card.selected .style-card-head{color:var(--sky-blue)}
+.style-card-desc{font-family:var(--font-mono);font-size:.58rem;color:var(--ink-dim);line-height:1.6}
+
+/* settings: custom css file controls — clearly separated from the
+   style cards above */
+.customcss{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
+.customcss .modal-subhead{margin-top:0}
+.customcss-actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 6px}
+.customcss-status{color:var(--ink-dim)}
+
 /* toast */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:2100;
   font-family:var(--font-mono);font-size:.68rem;font-weight:600;letter-spacing:.06em;color:var(--ink);
