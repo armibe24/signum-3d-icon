@@ -3,9 +3,8 @@
    drives the pipeline:
 
      svg text ──parse (main)──► worker 'process' (outline+boolean+
-     normalize) ──► worker 'bevel' (robust erosion rings, only when
-     bevel is on) ──► assemble mesh + shading (main) ──►
-     engine.setGeometry()
+     normalize) ──► extrude + bevel + shading (main, ExtrudeGeometry
+     per the SVG Extruder reference) ──► engine.setGeometry()
 
    - debounced so slider drags rebuild at most every 120 ms
    - every run gets an id; stale worker replies are dropped
@@ -19,9 +18,9 @@
 
 import type * as THREE from 'three'
 import { store } from '../store/store'
-import type { AppSettings, BevelPartData, MultiPolygon } from '../types'
+import type { AppSettings, MultiPolygon } from '../types'
 import { parseSvg } from '../svg/parse'
-import type { BevelResponse, ProcessResponse, SvgWorkerRequest, SvgWorkerResponse } from '../svg/types'
+import type { SvgWorkerRequest, SvgWorkerResponse } from '../svg/types'
 import { assembleIconGeometry, geometryLooksValid } from './mesh'
 import { geometryCache, polygonCache } from './cache'
 import { lucideSvg } from '../icons/lucide'
@@ -125,14 +124,14 @@ class GeometryBuilder {
       } else {
         const svgText = this.resolveSvg(settings)
         const parsed = parseSvg(svgText, g.quality, g.strokeWidth)
-        const response = (await this.request({
+        const response = await this.request({
           op: 'process',
           id: ++this.msgId,
           parsed,
           combine: g.combine,
           quality: g.quality,
           normalizeSize: g.normalizeSize,
-        })) as ProcessResponse
+        })
         if (id !== this.runId) return // superseded while waiting
         if (response.error) throw new Error(response.error)
         parts = response.parts
@@ -140,31 +139,9 @@ class GeometryBuilder {
         polygonCache.set(pKey, { parts, warnings })
       }
 
-      // ---- stage 2: robust bevel rings (worker), when bevel is on -----
-      let bevelParts: BevelPartData[]
-      const wantBevel = g.bevelStyle !== 'none' && g.bevelAmount > 0.01
-      if (wantBevel) {
-        const response = (await this.request({
-          op: 'bevel',
-          id: ++this.msgId,
-          parts,
-          style: g.bevelStyle as 'hard' | 'rounded',
-          amount: g.bevelAmount,
-          segments: g.bevelSegments,
-          depth: g.extrudeDepth,
-          quality: g.quality,
-        })) as BevelResponse
-        if (id !== this.runId) return
-        if (response.error) throw new Error(response.error)
-        warnings = [...warnings, ...response.warnings]
-        bevelParts = response.parts
-      } else {
-        bevelParts = parts.map((base) => ({ base, levels: [], bands: [], insets: [], bevel: 0 }))
-      }
-
-      // ---- stage 3: assembly + shading (main thread, fast) ------------
+      // ---- stage 2: extrude + bevel + shading (main thread) -----------
       if (id !== this.runId) return
-      const assembled = assembleIconGeometry(bevelParts, g)
+      const assembled = assembleIconGeometry(parts, g)
       warnings = [...warnings, ...assembled.warnings]
 
       if (!geometryLooksValid(assembled.geometry)) {

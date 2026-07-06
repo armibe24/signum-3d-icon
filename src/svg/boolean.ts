@@ -12,7 +12,6 @@
 
 import polygonClipping from 'polygon-clipping'
 import type { MultiPolygon, PolygonWithHoles, Ring } from '../types'
-import { bufferPolyline } from './outline'
 
 type PcGeom = Parameters<typeof polygonClipping.union>[0]
 
@@ -63,57 +62,4 @@ export function unionPolygons(polys: PolygonWithHoles[]): UnionResult {
 
   // 3) last resort: no boolean at all — overlapping pieces stay separate
   return { polygons: polys, clean: false }
-}
-
-/**
- * Robust polygon erosion (inward offset): P ⊖ disk(d), computed as
- * P minus a buffer of P's boundary. Unlike naive per-vertex bisector
- * offsetting (what ExtrudeGeometry's bevel does), this can never fold or
- * self-intersect — thin features simply erode away, acute corners round
- * off. Returns [] when the polygon erodes to nothing (or the boolean
- * backend fails), which callers treat as "inset not feasible".
- */
-export function erodePolygons(mp: MultiPolygon, distance: number, circleSegments: number): MultiPolygon {
-  if (distance <= 0 || mp.length === 0) return mp
-  const pieces: Ring[] = []
-  for (const poly of mp) {
-    for (const ring of poly) {
-      pieces.push(
-        ...bufferPolyline(ring, true, distance * 2, { circleSegments, simplifyEpsilon: 0 }),
-      )
-    }
-  }
-  const boundary = unionRings(pieces)
-  if (boundary.clean) {
-    try {
-      return polygonClipping.difference(mp as PcGeom, boundary.polygons as PcGeom) as MultiPolygon
-    } catch {
-      /* fall through to per-piece subtraction */
-    }
-  }
-  // Fallback: the boundary union was dirty (its members overlap, which is
-  // invalid input for a single difference call and can produce garbage
-  // regions — a past source of holes at stroke junctions). Subtract the
-  // pieces one at a time instead; each pairwise op has valid input.
-  let acc = mp
-  for (const piece of pieces) {
-    try {
-      acc = polygonClipping.difference(acc as PcGeom, [[piece]] as PcGeom) as MultiPolygon
-      if (!acc.length) return []
-    } catch {
-      /* skip the offending piece — erosion stays conservative */
-    }
-  }
-  return acc
-}
-
-/** Boolean difference wrapper (same isolation reasoning as union). */
-export function differencePolygons(subject: MultiPolygon, clip: MultiPolygon): MultiPolygon {
-  if (!subject.length) return []
-  if (!clip.length) return subject
-  try {
-    return polygonClipping.difference(subject as PcGeom, clip as PcGeom) as MultiPolygon
-  } catch {
-    return subject
-  }
 }

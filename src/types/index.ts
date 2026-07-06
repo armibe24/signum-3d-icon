@@ -237,19 +237,3 @@ export type Ring = Pair[]
 export type PolygonWithHoles = Ring[]
 export type MultiPolygon = PolygonWithHoles[]
 
-/**
- * One independently-extruded piece of the icon, with pre-computed robust
- * bevel data: `levels[k]` is the base outline eroded by the bevel profile
- * inset of step k+1, `bands[k]` is the annular region between step k and
- * k+1 (what the bevel surface spans). Empty levels/bands = no bevel.
- */
-export interface BevelPartData {
-  base: MultiPolygon
-  levels: MultiPolygon[]
-  bands: MultiPolygon[]
-  /** actual inset distance of each level (profile steps can be merged
-      when they would produce hairline bands), same length as `levels` */
-  insets: number[]
-  /** effective (possibly clamped) bevel amount, 0 = bevel disabled */
-  bevel: number
-}

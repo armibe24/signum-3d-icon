@@ -1,7 +1,7 @@
 /* Data exchanged between the main-thread SVG parser and the
    geometry worker. Everything here is plain JSON-serializable. */
 
-import type { MultiPolygon, Pair, PolygonWithHoles } from '../types'
+import type { GeometryQuality, MultiPolygon, Pair, PolygonWithHoles } from '../types'
 
 /** A sampled stroked element: polyline points + resolved stroke width */
 export interface StrokeElement {
@@ -21,10 +21,8 @@ export interface ParsedSvg {
   warnings: string[]
 }
 
-import type { BevelPartData, BevelStyle, GeometryQuality } from '../types'
-
 /** outline + boolean + normalize — produces the 2D solid per part */
-export interface ProcessRequest {
+export interface SvgWorkerRequest {
   op: 'process'
   id: number
   parsed: ParsedSvg
@@ -33,34 +31,10 @@ export interface ProcessRequest {
   normalizeSize: boolean
 }
 
-/** robust bevel-ring computation (erosion levels + annular bands) */
-export interface BevelRequest {
-  op: 'bevel'
-  id: number
-  parts: MultiPolygon[]
-  style: Exclude<BevelStyle, 'none'>
-  amount: number
-  segments: number
-  depth: number
-  quality: GeometryQuality
-}
-
-export type SvgWorkerRequest = ProcessRequest | BevelRequest
-
-export interface ProcessResponse {
+export interface SvgWorkerResponse {
   op: 'process'
   id: number
   parts: MultiPolygon[]
   warnings: string[]
   error?: string
 }
-
-export interface BevelResponse {
-  op: 'bevel'
-  id: number
-  parts: BevelPartData[]
-  warnings: string[]
-  error?: string
-}
-
-export type SvgWorkerResponse = ProcessResponse | BevelResponse

@@ -9,33 +9,20 @@
         stair-steps, dust/sliver rings)
      4. flip / center / rescale into normalized icon space
 
-   op 'bevel': base solid + bevel settings → erosion levels and
-   annular bands for the fold-proof bevel builder (geometry/mesh):
-     - each bevel step k gets E_k = erode(base, d_k), computed with
-       robust boolean erosion — unlike ExtrudeGeometry's bisector
-       offset this can NEVER fold, spike or self-intersect
-     - band k = E_k − E_{k+1}, the exact 2D footprint the slanted
-       bevel surface spans
-     - the amount is clamped to the shape's thinnest feature and,
-       if the shape would still erode away, reduced or disabled
-       with a warning (never silently broken)
+   Extrusion + bevel happen on the main thread with
+   THREE.ExtrudeGeometry on these cleaned contours (see
+   geometry/mesh.ts, built to match the SVG Extruder reference).
 
    Requests carry an id; stale responses are discarded by the
    caller, so rapid slider changes never race.
    ============================================================ */
 
 import { bufferPolyline } from '../svg/outline'
-import { differencePolygons, erodePolygons, unionPolygons, unionRings } from '../svg/boolean'
-import { normalizeParts, NORMALIZED_SIZE } from '../svg/normalize'
-import { cleanMultiPolygon, densifyMultiPolygon, estimateMinFeatureWidth } from '../svg/clean'
-import type { BevelPartData, GeometryQuality, MultiPolygon, PolygonWithHoles } from '../types'
-import type {
-  BevelRequest,
-  BevelResponse,
-  ProcessRequest,
-  ProcessResponse,
-  SvgWorkerRequest,
-} from '../svg/types'
+import { unionPolygons, unionRings } from '../svg/boolean'
+import { normalizeParts } from '../svg/normalize'
+import { cleanMultiPolygon } from '../svg/clean'
+import type { GeometryQuality, MultiPolygon, PolygonWithHoles } from '../types'
+import type { SvgWorkerRequest, SvgWorkerResponse } from '../svg/types'
 
 const CIRCLE_SEGMENTS: Record<GeometryQuality, number> = { fast: 12, balanced: 20, high: 32 }
 
@@ -43,7 +30,7 @@ const CIRCLE_SEGMENTS: Record<GeometryQuality, number> = { fast: 12, balanced: 2
 /* op: process                                                         */
 /* ------------------------------------------------------------------ */
 
-function handleProcess(req: ProcessRequest): ProcessResponse {
+function handleProcess(req: SvgWorkerRequest): SvgWorkerResponse {
   const { id, parsed, combine, quality, normalizeSize } = req
   const warnings: string[] = []
 
@@ -129,122 +116,11 @@ function handleProcess(req: ProcessRequest): ProcessResponse {
 }
 
 /* ------------------------------------------------------------------ */
-/* op: bevel                                                           */
-/* ------------------------------------------------------------------ */
-
-/** inset distances for each bevel step k = 1..S (step 0 is the base) */
-function profileInsets(style: 'hard' | 'rounded', b: number, segments: number): number[] {
-  if (style === 'hard') return [b]
-  const insets: number[] = []
-  for (let k = 1; k <= segments; k++) {
-    // circular round-over: d(θ) = b·(1 − cos θ), θ ∈ (0, π/2]
-    insets.push(b * (1 - Math.cos(((k / segments) * Math.PI) / 2)))
-  }
-  return insets
-}
-
-function handleBevel(req: BevelRequest): BevelResponse {
-  const { id, parts, style, amount, segments, depth, quality } = req
-  const warnings: string[] = []
-  const circleSegments = Math.max(CIRCLE_SEGMENTS[quality] - 4, 10)
-  const S = style === 'hard' ? 1 : Math.min(Math.max(Math.round(segments), 1), 8)
-  // cleanup tolerances in normalized units (icon spans NORMALIZED_SIZE)
-  const eps = NORMALIZED_SIZE * 0.0002
-  const minArea = Math.pow(NORMALIZED_SIZE * 0.003, 2)
-  // profile steps closer than this get merged — hairline bands are where
-  // slivers, stretched shards and seam gaps used to come from
-  const minStep = Math.max(eps * 6, NORMALIZED_SIZE * 0.0025)
-  // band/wall boundary edge length cap → uniform strip triangles
-  const maxEdge = NORMALIZED_SIZE * 0.02
-
-  const out: BevelPartData[] = []
-  let reducedTo = 0
-  let disabled = false
-
-  for (const rawBase of parts) {
-    // ---- clamp: bevel can never exceed what the shape can absorb ----
-    const ribbon = estimateMinFeatureWidth(rawBase, NORMALIZED_SIZE * 0.08)
-    let b = Math.min(amount, depth * 0.49, ribbon * 0.45)
-
-    // ---- feasibility: the deepest erosion must leave something ------
-    let deepest: MultiPolygon = []
-    for (let attempt = 0; attempt < 4 && b > 0.05; attempt++) {
-      deepest = erodePolygons(rawBase, b, circleSegments)
-      if (deepest.length) break
-      b *= 0.6
-      deepest = []
-    }
-    if (!deepest.length) b = 0
-
-    if (b <= 0.05) {
-      disabled = true
-      out.push({ base: rawBase, levels: [], bands: [], insets: [], bevel: 0 })
-      continue
-    }
-    if (b < amount - 0.05) reducedTo = Math.max(reducedTo, b)
-
-    // ---- profile steps, hairline bands merged away -------------------
-    const rawInsets = profileInsets(style, b, S)
-    const insets: number[] = []
-    let prevKept = 0
-    for (const d of rawInsets) {
-      if (d - prevKept >= minStep) {
-        insets.push(d)
-        prevKept = d
-      }
-    }
-    // the deepest step (d = b) must always be present
-    if (insets.length === 0 || Math.abs(insets[insets.length - 1] - b) > 1e-9) {
-      if (insets.length && b - insets[insets.length - 1] < minStep) insets.pop()
-      insets.push(b)
-    }
-
-    // ---- erosion levels, ITERATIVELY nested ---------------------------
-    // Each level is eroded from the previous (cleaned) level, never from
-    // the base: erosion can only remove area, so E_{k+1} ⊆ E_k holds even
-    // numerically. Independent erosions + independent RDP cleaning used to
-    // break this invariant, and difference(E_k, E_{k+1}) then left
-    // uncovered strips — the seam slits/holes in beveled icons.
-    const levels: MultiPolygon[] = []
-    let current: MultiPolygon = rawBase
-    let dPrev = 0
-    for (const d of insets) {
-      let next = current.length ? erodePolygons(current, d - dPrev, circleSegments) : []
-      next = cleanMultiPolygon(next, eps, minArea)
-      levels.push(next)
-      current = next
-      dPrev = d
-    }
-
-    // ---- densify boundaries for uniform strip triangulation ----------
-    const base = densifyMultiPolygon(rawBase, maxEdge)
-    const denseLevels = levels.map((l) => densifyMultiPolygon(l, maxEdge))
-
-    // ---- annular bands between consecutive levels --------------------
-    const seq: MultiPolygon[] = [base, ...denseLevels]
-    const bands: MultiPolygon[] = []
-    for (let k = 0; k < seq.length - 1; k++) {
-      bands.push(seq[k + 1].length ? differencePolygons(seq[k], seq[k + 1]) : seq[k])
-    }
-
-    out.push({ base, levels: denseLevels, bands, insets, bevel: b })
-  }
-
-  if (disabled) {
-    warnings.push('Bevel disabled for this icon — the shape is too thin to bevel safely.')
-  } else if (reducedTo > 0) {
-    warnings.push(`Bevel clamped to ${reducedTo.toFixed(1)} so the icon's thinnest features stay intact.`)
-  }
-
-  return { op: 'bevel', id, parts: out, warnings }
-}
-
-/* ------------------------------------------------------------------ */
 
 self.onmessage = (ev: MessageEvent<SvgWorkerRequest>) => {
   const req = ev.data
   try {
-    const response = req.op === 'process' ? handleProcess(req) : handleBevel(req)
+    const response = handleProcess(req)
     self.postMessage(response)
   } catch (e) {
     self.postMessage({

@@ -56,57 +56,6 @@ function simplifyRing(ring: Ring, eps: number): Ring {
 }
 
 /**
- * Estimate the narrowest feature width of a polygon set. For ribbon-like
- * shapes (outlined strokes — the common case) width ≈ 2·Area/Perimeter.
- * Holes shrink the effective area, making the estimate conservative.
- * Used to clamp bevel insets below what the shape can absorb.
- */
-export function estimateMinFeatureWidth(mp: MultiPolygon, fallback: number): number {
-  let minW = Infinity
-  for (const poly of mp) {
-    if (!poly.length || poly[0].length < 3) continue
-    let area = Math.abs(ringArea(poly[0]))
-    let perim = ringPerimeter(poly[0])
-    for (let h = 1; h < poly.length; h++) {
-      area -= Math.abs(ringArea(poly[h]))
-      perim += ringPerimeter(poly[h])
-    }
-    if (perim <= 0 || area <= 0) continue
-    const w = (2 * area) / perim
-    if (w < minW) minW = w
-  }
-  return isFinite(minW) ? minW : fallback
-}
-
-/**
- * Subdivide ring edges longer than `maxLen`. Densified boundaries give the
- * bevel-band triangulation uniformly sized triangles instead of long
- * stretched shards, and give the analytic normals more samples along
- * curves. Densification never moves the boundary, so polygon nesting
- * relationships are preserved exactly.
- */
-export function densifyMultiPolygon(mp: MultiPolygon, maxLen: number): MultiPolygon {
-  if (maxLen <= 0) return mp
-  return mp.map((poly) =>
-    poly.map((ring) => {
-      const out: Ring = []
-      for (let i = 0; i < ring.length; i++) {
-        const [ax, ay] = ring[i]
-        const [bx, by] = ring[(i + 1) % ring.length]
-        out.push([ax, ay])
-        const len = Math.hypot(bx - ax, by - ay)
-        const splits = Math.floor(len / maxLen)
-        for (let s = 1; s <= splits; s++) {
-          const t = s / (splits + 1)
-          out.push([ax + (bx - ax) * t, ay + (by - ay) * t])
-        }
-      }
-      return out
-    }),
-  )
-}
-
-/**
  * Clean a MultiPolygon in place-independent fashion.
  * @param eps      RDP tolerance (same units as the polygons)
  * @param minArea  rings smaller than this are dust and get dropped
