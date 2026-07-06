@@ -177,22 +177,23 @@
   border:1px solid var(--accent);background:rgba(0,0,0,.4);outline:none;
   box-shadow:0 0 10px rgba(70,179,204,.25)}
 
-/* range slider */
+/* range slider — fully token-driven (see --slider-* in theme.css) */
 input[type="range"]{-webkit-appearance:none;appearance:none;width:100%;height:22px;background:transparent}
 input[type="range"]::-webkit-slider-runnable-track{height:6px;border-radius:999px;
-  background:linear-gradient(180deg,rgba(0,0,0,.5),rgba(29,58,70,.9));
-  border:1px solid var(--line);box-shadow:inset 0 1px 3px rgba(0,0,0,.5)}
+  background:var(--slider-track-bg);
+  border:1px solid var(--slider-track-border);box-shadow:var(--slider-track-shadow)}
 input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;
-  border-radius:50%;margin-top:-6px;border:1px solid rgba(95,198,232,.7);
-  background:radial-gradient(circle at 34% 30%,#fff 0 24%,transparent 25%),
-    linear-gradient(180deg,#7fdcf4,#46b3cc);
-  box-shadow:0 0 10px rgba(95,198,232,.55),0 2px 6px rgba(0,0,0,.5);cursor:pointer;
+  border-radius:var(--slider-thumb-radius);margin-top:-6px;border:1px solid var(--slider-thumb-border);
+  background:var(--slider-thumb-bg);
+  box-shadow:var(--slider-thumb-shadow);cursor:pointer;
   transition:box-shadow var(--transition-fast)}
-input[type="range"]::-webkit-slider-thumb:hover{box-shadow:0 0 16px rgba(95,198,232,.85),0 2px 6px rgba(0,0,0,.5)}
-input[type="range"]::-moz-range-track{height:6px;border-radius:999px;background:#12262e;border:1px solid var(--line)}
-input[type="range"]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;
-  border:1px solid rgba(95,198,232,.7);background:linear-gradient(180deg,#7fdcf4,#46b3cc);
-  box-shadow:0 0 10px rgba(95,198,232,.55)}
+input[type="range"]::-webkit-slider-thumb:hover{box-shadow:var(--slider-thumb-shadow-hover)}
+input[type="range"]::-moz-range-track{height:6px;border-radius:999px;
+  background:var(--slider-track-bg);border:1px solid var(--slider-track-border);
+  box-shadow:var(--slider-track-shadow)}
+input[type="range"]::-moz-range-thumb{width:15px;height:15px;border-radius:var(--slider-thumb-radius);
+  border:1px solid var(--slider-thumb-border);background:var(--slider-thumb-bg);
+  box-shadow:var(--slider-thumb-shadow)}
 
 /* ============================================================
    CUSTOM SELECT

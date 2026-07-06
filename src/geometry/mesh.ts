@@ -169,7 +169,14 @@ function applyShading(geo: THREE.BufferGeometry, g: GeometrySettings): THREE.Buf
       parts.push(welded.toNonIndexed())
       welded.dispose()
     } else {
-      const angle = Math.min(Math.max(g.shadingAngle, 1), 180)
+      let angle = Math.min(Math.max(g.shadingAngle, 1), 180)
+      // Hard bevel: the wall↔chamfer dihedral is EXACTLY 45°. A threshold
+      // at/near 45° sits on the floating-point boundary, merging some seam
+      // vertices and not others — the patchy smears along the chamfer.
+      // Snap thresholds in the ambiguous band below the seam angle so the
+      // chamfer edges stay uniformly crisp (matching the reference look);
+      // explicitly higher thresholds still smooth across on purpose.
+      if (g.bevelStyle === 'hard' && angle >= 41 && angle <= 49) angle = 40
       const creased = toCreasedNormals(part, THREE.MathUtils.degToRad(angle))
       if (creased !== part) part.dispose()
       parts.push(creased)
