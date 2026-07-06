@@ -7,17 +7,19 @@
    by 1/sin(θ/2) and vertices cross over, folding the cap
    triangulation into overlapping/flipped planes.
 
-   Here every bevel ring is a *robustly eroded polygon* computed
-   with boolean ops in the worker, and the mesh is assembled from
-   regions that are valid by construction:
+   Here the bevel is a pure 2D contour-offset problem: every ring
+   is a robustly eroded polygon (boolean ops in the worker, nested
+   iteratively so E_{k+1} ⊆ E_k always holds), and the mesh is
+   assembled from regions that are valid by construction:
 
      back cap ─ back bevel bands ─ straight walls ─ front bands ─ front cap
 
    - walls: quads along the exact base outline (silhouette is
-     preserved — the bevel cuts inward, never inflates)
+     preserved — the bevel cuts inward, never inflates; holes
+     offset outward automatically because erosion shrinks solids)
    - bevel band k: the 2D annulus between erosion level k and k+1,
-     triangulated flat, then each vertex lifted to its ring's z —
-     this works even when erosion splits or consumes thin features
+     triangulated flat with densified, uniformly-sized boundary
+     edges, each vertex lifted to its ring's z
    - caps: ONLY the deepest erosion level (no full-size face hides
      underneath the bevel), triangulated at ±depth/2
 
@@ -32,16 +34,23 @@
      only where the corner angle is below the shading threshold
    - bevel bands use the true profile normal
      n = n2d·cos(θ) + ẑ·sin(θ), which makes a rounded bevel
-     G1-continuous with both the wall (θ=0) and the cap (θ=90°) —
-     no triangulation-dependent streaks
+     G1-continuous with both the wall (θ=0) and the cap (θ=90°)
    - "flat" shading bypasses all of this with per-face normals
+
+   Band vertices are matched to their boundary ring by exact
+   coordinate first and by distance-to-boundary as a fallback, so
+   numeric perturbations from the boolean backend can never assign
+   a vertex the wrong height (the old source of pinched seams).
    ============================================================ */
 
 import * as THREE from 'three'
-import type { BevelPartData, GeometrySettings, MultiPolygon, Ring } from '../types'
+import type { BevelPartData, BevelStyle, GeometrySettings, MultiPolygon, Ring } from '../types'
 import { NORMALIZED_SIZE } from '../svg/normalize'
 
 const WELD_EPS = 1e-4
+/** distance fallback tolerance for boundary matching — far below the
+    minimum band width enforced by the worker's step merging */
+const BOUNDARY_TOL = NORMALIZED_SIZE * 0.0008
 
 export interface AssembledGeometry {
   geometry: THREE.BufferGeometry
@@ -102,7 +111,7 @@ function coordKey(x: number, y: number): string {
 }
 
 /* ------------------------------------------------------------------ */
-/* 2D outline normals (shared by walls and bevel bands)                */
+/* 2D outline normals + boundary matching                              */
 /* ------------------------------------------------------------------ */
 
 type Vec2 = [number, number]
@@ -141,34 +150,114 @@ function ringNormals(ring: Ring, cosThreshold: number) {
   return { edge, smooth }
 }
 
-/** coordKey → averaged outline normal for every vertex of a level. */
-function levelNormalMap(mp: MultiPolygon, cosThreshold: number): Map<string, Vec2> {
-  const map = new Map<string, Vec2>()
-  for (const poly of orientPolygons(mp)) {
-    for (const ring of poly) {
-      const { edge, smooth } = ringNormals(ring, cosThreshold)
-      const n = ring.length
-      for (let i = 0; i < n; i++) {
-        // bands need ONE normal per vertex; at hard corners fall back to
-        // the bisector average (a hair of corner softening, never a streak)
-        let v = smooth[i]
-        if (!v) {
-          const prev = edge[(i - 1 + n) % n]
-          const next = edge[i]
-          const sx = prev[0] + next[0]
-          const sy = prev[1] + next[1]
-          const len = Math.hypot(sx, sy) || 1
-          v = [sx / len, sy / len]
+interface BoundarySeg {
+  ax: number
+  ay: number
+  bx: number
+  by: number
+  nx: number
+  ny: number
+}
+
+/**
+ * Boundary of one erosion level: exact vertex set + smoothed per-vertex
+ * normals + segment list. `contains` matches by exact coordinate first,
+ * then by distance (numeric perturbations from the boolean backend must
+ * never flip a vertex to the wrong ring / wrong height). `normalFor`
+ * falls back to the nearest segment's outward normal for vertices the
+ * backend introduced mid-edge.
+ */
+class LevelBoundary {
+  private keys = new Set<string>()
+  private normals = new Map<string, Vec2>()
+  private segs: BoundarySeg[] = []
+  readonly empty: boolean
+
+  constructor(mp: MultiPolygon, cosThreshold: number) {
+    for (const poly of orientPolygons(mp)) {
+      for (const ring of poly) {
+        const { edge, smooth } = ringNormals(ring, cosThreshold)
+        const n = ring.length
+        for (let i = 0; i < n; i++) {
+          const [x, y] = ring[i]
+          const key = coordKey(x, y)
+          this.keys.add(key)
+          let v = smooth[i]
+          if (!v) {
+            const prev = edge[(i - 1 + n) % n]
+            const next = edge[i]
+            const sx = prev[0] + next[0]
+            const sy = prev[1] + next[1]
+            const len = Math.hypot(sx, sy) || 1
+            v = [sx / len, sy / len]
+          }
+          this.normals.set(key, v)
+          const [bx, by] = ring[(i + 1) % n]
+          this.segs.push({ ax: x, ay: y, bx, by, nx: edge[i][0], ny: edge[i][1] })
         }
-        map.set(coordKey(ring[i][0], ring[i][1]), v)
       }
     }
+    this.empty = this.segs.length === 0
   }
-  return map
+
+  private distSq(x: number, y: number, s: BoundarySeg): number {
+    const dx = s.bx - s.ax
+    const dy = s.by - s.ay
+    const len2 = dx * dx + dy * dy
+    let t = len2 > 0 ? ((x - s.ax) * dx + (y - s.ay) * dy) / len2 : 0
+    t = Math.min(Math.max(t, 0), 1)
+    const px = s.ax + dx * t
+    const py = s.ay + dy * t
+    return (x - px) * (x - px) + (y - py) * (y - py)
+  }
+
+  contains(x: number, y: number): boolean {
+    if (this.keys.has(coordKey(x, y))) return true
+    if (this.empty) return false
+    const tol2 = BOUNDARY_TOL * BOUNDARY_TOL
+    for (const s of this.segs) {
+      // cheap reject before the exact distance test
+      if (x < Math.min(s.ax, s.bx) - BOUNDARY_TOL || x > Math.max(s.ax, s.bx) + BOUNDARY_TOL) continue
+      if (y < Math.min(s.ay, s.by) - BOUNDARY_TOL || y > Math.max(s.ay, s.by) + BOUNDARY_TOL) continue
+      if (this.distSq(x, y, s) <= tol2) return true
+    }
+    return false
+  }
+
+  normalFor(x: number, y: number): Vec2 {
+    const exact = this.normals.get(coordKey(x, y))
+    if (exact) return exact
+    // nearest-segment fallback for backend-introduced vertices
+    let best: BoundarySeg | null = null
+    let bestD = Infinity
+    for (const s of this.segs) {
+      const d = this.distSq(x, y, s)
+      if (d < bestD) {
+        bestD = d
+        best = s
+      }
+    }
+    return best ? [best.nx, best.ny] : [0, 0]
+  }
 }
 
 /* ------------------------------------------------------------------ */
-/* mesh sink                                                           */
+/* bevel profile (driven by the worker's actual inset distances)       */
+/* ------------------------------------------------------------------ */
+
+function profileZ(style: BevelStyle, b: number, d: number, h2: number): number {
+  if (style === 'hard') return h2 - b + d // straight 45° chamfer
+  const c = Math.min(Math.max(1 - d / b, -1), 1)
+  return h2 - b + b * Math.sqrt(1 - c * c) // round-over: z = b·sin(acos(1−d/b))
+}
+
+function profileElevation(style: BevelStyle, b: number, d: number): number {
+  if (style === 'hard') return Math.PI / 4
+  return Math.acos(Math.min(Math.max(1 - d / b, -1), 1))
+}
+
+/* ------------------------------------------------------------------ */
+/* mesh sink + triangulation                                           */
 /* ------------------------------------------------------------------ */
 
 class MeshSink {
@@ -181,6 +270,13 @@ class MeshSink {
     bx: number, by: number, bz: number, bn: [number, number, number],
     cx: number, cy: number, cz: number, cn: [number, number, number],
   ) {
+    // skip degenerate slivers — they render as shards under gloss
+    const ux = bx - ax, uy = by - ay, uz = bz - az
+    const vx = cx - ax, vy = cy - ay, vz = cz - az
+    const crx = uy * vz - uz * vy
+    const cry = uz * vx - ux * vz
+    const crz = ux * vy - uy * vx
+    if (crx * crx + cry * cry + crz * crz < 1e-12) return
     this.positions.push(ax, ay, az, bx, by, bz, cx, cy, cz)
     this.normals.push(...an, ...bn, ...cn)
   }
@@ -223,22 +319,16 @@ function emitCap(sink: MeshSink, mp: MultiPolygon, z: number, flip: boolean) {
 }
 
 interface BandShading {
-  /** coordKey → outline normal, for outer and inner boundary levels */
-  outerMap: Map<string, Vec2>
-  innerMap: Map<string, Vec2>
-  innerSet: Set<string>
-  /** profile normal elevation (radians) at outer / inner boundary */
+  outer: LevelBoundary
+  inner: LevelBoundary
   elevOuter: number
   elevInner: number
-  /** true → ignore analytic normals, use per-face (flat facets) */
   faceted: boolean
 }
 
 /**
  * Bevel band: the 2D annulus between two erosion levels, each vertex
- * lifted to its ring's z. Normals come from the bevel profile: at
- * elevation θ the surface normal is n2d·cosθ + ẑ·sinθ, which matches the
- * wall exactly at θ=0 and the cap exactly at θ=90° — seamless rounding.
+ * lifted to its ring's z with the true profile normal.
  */
 function emitBand(
   sink: MeshSink,
@@ -251,14 +341,24 @@ function emitBand(
   const zSign = flip ? -1 : 1
 
   const vertexData = (v: THREE.Vector2): { z: number; n: [number, number, number] } => {
-    const key = coordKey(v.x, v.y)
-    const inner = shading.innerSet.has(key)
+    const inner = shading.inner.contains(v.x, v.y)
+    const boundary = inner ? shading.inner : shading.outer
     const z = inner ? zInner : zOuter
-    const n2d = (inner ? shading.innerMap.get(key) : shading.outerMap.get(key)) ?? [0, 0]
+    const n2d = boundary.normalFor(v.x, v.y)
     const elev = inner ? shading.elevInner : shading.elevOuter
     const cos = Math.cos(elev)
     const sin = Math.sin(elev)
-    return { z, n: [n2d[0] * cos, n2d[1] * cos, sin * zSign] }
+    let nx = n2d[0] * cos
+    let ny = n2d[1] * cos
+    let nz = sin * zSign
+    const len = Math.hypot(nx, ny, nz)
+    if (len < 0.5) {
+      // no usable outline normal (isolated point) — face up/down
+      nx = 0; ny = 0; nz = zSign
+    } else {
+      nx /= len; ny /= len; nz /= len
+    }
+    return { z, n: [nx, ny, nz] }
   }
 
   for (const { verts, faces } of triangulate(band, sink)) {
@@ -279,7 +379,6 @@ function emitBand(
         let ny = uz * vx - ux * vz
         let nzc = ux * vy - uy * vx
         const len = Math.hypot(nx, ny, nzc) || 1
-        // face normal follows front winding; mirror for the back side
         nx /= len; ny /= len; nzc /= len
         const fn: [number, number, number] = flip ? [nx, ny, -nzc] : [nx, ny, nzc]
         dA.n = fn; dB.n = fn; dC.n = fn
@@ -319,26 +418,14 @@ function emitWalls(sink: MeshSink, mp: MultiPolygon, z0: number, z1: number, cos
 /* part assembly                                                       */
 /* ------------------------------------------------------------------ */
 
-function vertexSet(mp: MultiPolygon): Set<string> {
-  const set = new Set<string>()
-  for (const poly of mp) for (const ring of poly) for (const [x, y] of ring) set.add(coordKey(x, y))
-  return set
-}
-
-/** z of bevel step k (0 = wall top … S = cap plane) for half-depth h2 */
-function stepZ(style: GeometrySettings['bevelStyle'], b: number, S: number, k: number, h2: number): number {
-  if (k <= 0) return h2 - b
-  if (style === 'hard') return h2
-  return h2 - b + b * Math.sin(((k / S) * Math.PI) / 2)
-}
-
-/** profile normal elevation at step k */
-function stepElevation(style: GeometrySettings['bevelStyle'], S: number, k: number): number {
-  if (style === 'hard') return Math.PI / 4 // 45° chamfer, constant across the strip
-  return ((k / S) * Math.PI) / 2
-}
-
-function emitPart(sink: MeshSink, part: BevelPartData, g: GeometrySettings, zScale: number, cosThreshold: number, faceted: boolean) {
+function emitPart(
+  sink: MeshSink,
+  part: BevelPartData,
+  g: GeometrySettings,
+  zScale: number,
+  cosThreshold: number,
+  faceted: boolean,
+) {
   const h2 = (Math.max(g.extrudeDepth, 0.1) / 2) * zScale
   const S = part.levels.length
   const b = S > 0 ? part.bevel * zScale : 0
@@ -353,25 +440,29 @@ function emitPart(sink: MeshSink, part: BevelPartData, g: GeometrySettings, zSca
   }
 
   const seq: MultiPolygon[] = [part.base, ...part.levels]
-  const maps = seq.map((level) => levelNormalMap(level, cosThreshold))
+  const dSeq: number[] = [0, ...part.insets]
+  const boundaries = seq.map((level) => new LevelBoundary(level, cosThreshold))
+
   for (let k = 0; k < S; k++) {
     const shading: BandShading = {
-      outerMap: maps[k],
-      innerMap: maps[k + 1],
-      innerSet: vertexSet(seq[k + 1]),
-      elevOuter: stepElevation(g.bevelStyle, S, k),
-      elevInner: stepElevation(g.bevelStyle, S, k + 1),
+      outer: boundaries[k],
+      inner: boundaries[k + 1],
+      elevOuter: profileElevation(g.bevelStyle, part.bevel, dSeq[k]),
+      elevInner: profileElevation(g.bevelStyle, part.bevel, dSeq[k + 1]),
       faceted,
     }
-    const zo = stepZ(g.bevelStyle, b, S, k, h2)
-    const zi = stepZ(g.bevelStyle, b, S, k + 1, h2)
+    const zo = profileZ(g.bevelStyle, b, dSeq[k] * zScale, h2)
+    const zi = profileZ(g.bevelStyle, b, dSeq[k + 1] * zScale, h2)
     emitBand(sink, part.bands[k], zo, zi, shading, false)
     emitBand(sink, part.bands[k], zo, zi, shading, true)
   }
 
+  // cap = deepest non-empty level (empty when thin shapes fully rounded off)
   const cap = part.levels[S - 1]
-  emitCap(sink, cap, h2, false)
-  emitCap(sink, cap, -h2, true)
+  if (cap.length) {
+    emitCap(sink, cap, h2, false)
+    emitCap(sink, cap, -h2, true)
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -396,7 +487,7 @@ export function assembleIconGeometry(parts: BevelPartData[], g: GeometrySettings
   parts.forEach((part, index) => {
     // tiny per-part depth offset kills z-fighting between coplanar caps
     const zScale = parts.length > 1 ? 1 + index * 0.0015 : 1
-    emitPart(sink, part, g, zScale, flatMode ? 2 /* dot ≥ 2 is impossible → never smooth */ : cosThreshold, facetedBands)
+    emitPart(sink, part, g, zScale, flatMode ? 2 /* dot ≥ 2 impossible → never smooth */ : cosThreshold, facetedBands)
   })
 
   const warnings: string[] = []

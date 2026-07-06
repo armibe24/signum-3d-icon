@@ -247,6 +247,9 @@ export interface BevelPartData {
   base: MultiPolygon
   levels: MultiPolygon[]
   bands: MultiPolygon[]
+  /** actual inset distance of each level (profile steps can be merged
+      when they would produce hairline bands), same length as `levels` */
+  insets: number[]
   /** effective (possibly clamped) bevel amount, 0 = bevel disabled */
   bevel: number
 }

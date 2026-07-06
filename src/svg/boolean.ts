@@ -84,11 +84,27 @@ export function erodePolygons(mp: MultiPolygon, distance: number, circleSegments
     }
   }
   const boundary = unionRings(pieces)
-  try {
-    return polygonClipping.difference(mp as PcGeom, boundary.polygons as PcGeom) as MultiPolygon
-  } catch {
-    return []
+  if (boundary.clean) {
+    try {
+      return polygonClipping.difference(mp as PcGeom, boundary.polygons as PcGeom) as MultiPolygon
+    } catch {
+      /* fall through to per-piece subtraction */
+    }
   }
+  // Fallback: the boundary union was dirty (its members overlap, which is
+  // invalid input for a single difference call and can produce garbage
+  // regions — a past source of holes at stroke junctions). Subtract the
+  // pieces one at a time instead; each pairwise op has valid input.
+  let acc = mp
+  for (const piece of pieces) {
+    try {
+      acc = polygonClipping.difference(acc as PcGeom, [[piece]] as PcGeom) as MultiPolygon
+      if (!acc.length) return []
+    } catch {
+      /* skip the offending piece — erosion stays conservative */
+    }
+  }
+  return acc
 }
 
 /** Boolean difference wrapper (same isolation reasoning as union). */

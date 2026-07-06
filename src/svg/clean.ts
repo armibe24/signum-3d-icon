@@ -79,6 +79,34 @@ export function estimateMinFeatureWidth(mp: MultiPolygon, fallback: number): num
 }
 
 /**
+ * Subdivide ring edges longer than `maxLen`. Densified boundaries give the
+ * bevel-band triangulation uniformly sized triangles instead of long
+ * stretched shards, and give the analytic normals more samples along
+ * curves. Densification never moves the boundary, so polygon nesting
+ * relationships are preserved exactly.
+ */
+export function densifyMultiPolygon(mp: MultiPolygon, maxLen: number): MultiPolygon {
+  if (maxLen <= 0) return mp
+  return mp.map((poly) =>
+    poly.map((ring) => {
+      const out: Ring = []
+      for (let i = 0; i < ring.length; i++) {
+        const [ax, ay] = ring[i]
+        const [bx, by] = ring[(i + 1) % ring.length]
+        out.push([ax, ay])
+        const len = Math.hypot(bx - ax, by - ay)
+        const splits = Math.floor(len / maxLen)
+        for (let s = 1; s <= splits; s++) {
+          const t = s / (splits + 1)
+          out.push([ax + (bx - ax) * t, ay + (by - ay) * t])
+        }
+      }
+      return out
+    }),
+  )
+}
+
+/**
  * Clean a MultiPolygon in place-independent fashion.
  * @param eps      RDP tolerance (same units as the polygons)
  * @param minArea  rings smaller than this are dust and get dropped

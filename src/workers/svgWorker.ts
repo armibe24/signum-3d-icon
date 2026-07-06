@@ -27,7 +27,7 @@
 import { bufferPolyline } from '../svg/outline'
 import { differencePolygons, erodePolygons, unionPolygons, unionRings } from '../svg/boolean'
 import { normalizeParts, NORMALIZED_SIZE } from '../svg/normalize'
-import { cleanMultiPolygon, estimateMinFeatureWidth } from '../svg/clean'
+import { cleanMultiPolygon, densifyMultiPolygon, estimateMinFeatureWidth } from '../svg/clean'
 import type { BevelPartData, GeometryQuality, MultiPolygon, PolygonWithHoles } from '../types'
 import type {
   BevelRequest,
@@ -149,22 +149,27 @@ function handleBevel(req: BevelRequest): BevelResponse {
   const circleSegments = Math.max(CIRCLE_SEGMENTS[quality] - 4, 10)
   const S = style === 'hard' ? 1 : Math.min(Math.max(Math.round(segments), 1), 8)
   // cleanup tolerances in normalized units (icon spans NORMALIZED_SIZE)
-  const eps = NORMALIZED_SIZE * 0.0006
-  const minArea = Math.pow(NORMALIZED_SIZE * 0.004, 2)
+  const eps = NORMALIZED_SIZE * 0.0002
+  const minArea = Math.pow(NORMALIZED_SIZE * 0.003, 2)
+  // profile steps closer than this get merged — hairline bands are where
+  // slivers, stretched shards and seam gaps used to come from
+  const minStep = Math.max(eps * 6, NORMALIZED_SIZE * 0.0025)
+  // band/wall boundary edge length cap → uniform strip triangles
+  const maxEdge = NORMALIZED_SIZE * 0.02
 
   const out: BevelPartData[] = []
   let reducedTo = 0
   let disabled = false
 
-  for (const base of parts) {
+  for (const rawBase of parts) {
     // ---- clamp: bevel can never exceed what the shape can absorb ----
-    const ribbon = estimateMinFeatureWidth(base, NORMALIZED_SIZE * 0.08)
+    const ribbon = estimateMinFeatureWidth(rawBase, NORMALIZED_SIZE * 0.08)
     let b = Math.min(amount, depth * 0.49, ribbon * 0.45)
 
     // ---- feasibility: the deepest erosion must leave something ------
     let deepest: MultiPolygon = []
     for (let attempt = 0; attempt < 4 && b > 0.05; attempt++) {
-      deepest = erodePolygons(base, b, circleSegments)
+      deepest = erodePolygons(rawBase, b, circleSegments)
       if (deepest.length) break
       b *= 0.6
       deepest = []
@@ -173,28 +178,56 @@ function handleBevel(req: BevelRequest): BevelResponse {
 
     if (b <= 0.05) {
       disabled = true
-      out.push({ base, levels: [], bands: [], bevel: 0 })
+      out.push({ base: rawBase, levels: [], bands: [], insets: [], bevel: 0 })
       continue
     }
     if (b < amount - 0.05) reducedTo = Math.max(reducedTo, b)
 
-    // ---- erosion levels E_1..E_S (each independent → monotonic) -----
-    const insets = profileInsets(style, b, S)
-    const levels: MultiPolygon[] = insets.map((d, i) => {
-      if (i === insets.length - 1 && Math.abs(d - b) < 1e-9) {
-        return cleanMultiPolygon(deepest, eps, minArea)
+    // ---- profile steps, hairline bands merged away -------------------
+    const rawInsets = profileInsets(style, b, S)
+    const insets: number[] = []
+    let prevKept = 0
+    for (const d of rawInsets) {
+      if (d - prevKept >= minStep) {
+        insets.push(d)
+        prevKept = d
       }
-      return cleanMultiPolygon(erodePolygons(base, d, circleSegments), eps, minArea)
-    })
-
-    // ---- annular bands between consecutive levels --------------------
-    const seq: MultiPolygon[] = [base, ...levels]
-    const bands: MultiPolygon[] = []
-    for (let k = 0; k < seq.length - 1; k++) {
-      bands.push(differencePolygons(seq[k], seq[k + 1]))
+    }
+    // the deepest step (d = b) must always be present
+    if (insets.length === 0 || Math.abs(insets[insets.length - 1] - b) > 1e-9) {
+      if (insets.length && b - insets[insets.length - 1] < minStep) insets.pop()
+      insets.push(b)
     }
 
-    out.push({ base, levels, bands, bevel: b })
+    // ---- erosion levels, ITERATIVELY nested ---------------------------
+    // Each level is eroded from the previous (cleaned) level, never from
+    // the base: erosion can only remove area, so E_{k+1} ⊆ E_k holds even
+    // numerically. Independent erosions + independent RDP cleaning used to
+    // break this invariant, and difference(E_k, E_{k+1}) then left
+    // uncovered strips — the seam slits/holes in beveled icons.
+    const levels: MultiPolygon[] = []
+    let current: MultiPolygon = rawBase
+    let dPrev = 0
+    for (const d of insets) {
+      let next = current.length ? erodePolygons(current, d - dPrev, circleSegments) : []
+      next = cleanMultiPolygon(next, eps, minArea)
+      levels.push(next)
+      current = next
+      dPrev = d
+    }
+
+    // ---- densify boundaries for uniform strip triangulation ----------
+    const base = densifyMultiPolygon(rawBase, maxEdge)
+    const denseLevels = levels.map((l) => densifyMultiPolygon(l, maxEdge))
+
+    // ---- annular bands between consecutive levels --------------------
+    const seq: MultiPolygon[] = [base, ...denseLevels]
+    const bands: MultiPolygon[] = []
+    for (let k = 0; k < seq.length - 1; k++) {
+      bands.push(seq[k + 1].length ? differencePolygons(seq[k], seq[k + 1]) : seq[k])
+    }
+
+    out.push({ base, levels: denseLevels, bands, insets, bevel: b })
   }
 
   if (disabled) {

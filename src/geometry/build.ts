@@ -159,7 +159,7 @@ class GeometryBuilder {
         warnings = [...warnings, ...response.warnings]
         bevelParts = response.parts
       } else {
-        bevelParts = parts.map((base) => ({ base, levels: [], bands: [], bevel: 0 }))
+        bevelParts = parts.map((base) => ({ base, levels: [], bands: [], insets: [], bevel: 0 }))
       }
 
       // ---- stage 3: assembly + shading (main thread, fast) ------------
