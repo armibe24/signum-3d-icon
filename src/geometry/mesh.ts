@@ -126,28 +126,59 @@ function polygonsToShapes(parts: MultiPolygon[]): THREE.Shape[] {
 /* shading                                                             */
 /* ------------------------------------------------------------------ */
 
+/** Copy a vertex range of a non-indexed geometry into its own geometry. */
+function sliceRange(geo: THREE.BufferGeometry, start: number, count: number): THREE.BufferGeometry {
+  const pos = geo.getAttribute('position')
+  const arr = new Float32Array(count * 3)
+  arr.set((pos.array as Float32Array).subarray(start * 3, (start + count) * 3))
+  const out = new THREE.BufferGeometry()
+  out.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3))
+  return out
+}
+
 /**
- * Normals per the selected shading mode, applied after extrusion:
- * - flat: computeVertexNormals on the non-indexed extrusion — true
- *   per-face normals (this is exactly what the reference does)
- * - smooth: weld everything, average normals across all edges
- * - angle: smooth only edges flatter than the threshold
+ * Normals per the selected shading mode, applied after extrusion.
+ *
+ * The front/back caps and the side/bevel surfaces are shaded SEPARATELY,
+ * using the vertex groups ExtrudeGeometry itself emits (group 0 = caps,
+ * group 1 = walls + bevel). Smoothing the whole mesh at once lets the
+ * cap-edge vertices average with the adjacent bevel normals (the dihedral
+ * angle at that seam is far below any useful threshold), which tilts the
+ * cap normals and paints diagonal creases across the flat face — the
+ * exact artifact the reference avoids by never smoothing. Splitting the
+ * groups keeps caps mathematically flat in every mode.
  */
 function applyShading(geo: THREE.BufferGeometry, g: GeometrySettings): THREE.BufferGeometry {
-  if (g.shading === 'flat') {
+  // flat: exactly what the reference does — per-face normals everywhere
+  if (g.shading === 'flat' || !geo.groups.length) {
     geo.computeVertexNormals()
     return geo
   }
-  if (g.shading === 'smooth') {
-    const merged = mergeVertices(geo, 1e-4)
-    merged.computeVertexNormals()
-    geo.dispose()
-    return merged
+
+  const parts: THREE.BufferGeometry[] = []
+  for (const group of geo.groups) {
+    const part = sliceRange(geo, group.start, group.count)
+    if (group.materialIndex === 0) {
+      // caps: coplanar triangles → computeVertexNormals is exactly (0,0,±1)
+      part.computeVertexNormals()
+      parts.push(part)
+    } else if (g.shading === 'smooth') {
+      const welded = mergeVertices(part, 1e-4)
+      welded.computeVertexNormals()
+      part.dispose()
+      parts.push(welded.toNonIndexed())
+      welded.dispose()
+    } else {
+      const angle = Math.min(Math.max(g.shadingAngle, 1), 180)
+      const creased = toCreasedNormals(part, THREE.MathUtils.degToRad(angle))
+      if (creased !== part) part.dispose()
+      parts.push(creased)
+    }
   }
-  const angle = Math.min(Math.max(g.shadingAngle, 1), 180)
-  const creased = toCreasedNormals(geo, THREE.MathUtils.degToRad(angle))
-  if (creased !== geo) geo.dispose()
-  return creased
+  geo.dispose()
+  const merged = mergeGeometries(parts, false) ?? parts[0]
+  for (const p of parts) if (p !== merged) p.dispose()
+  return merged
 }
 
 /* ------------------------------------------------------------------ */
@@ -180,12 +211,14 @@ export function assembleIconGeometry(parts: MultiPolygon[], g: GeometrySettings)
         : 1 // single segment = classic chamfer
   }
 
-  // one geometry per shape (like the reference's one mesh per shape),
-  // merged so the rest of the app keeps its single-mesh contract
+  // one geometry per shape (like the reference's one mesh per shape).
+  // Shading runs PER SHAPE — it needs the cap/side vertex groups, which
+  // a merge would discard — then everything is merged so the rest of the
+  // app keeps its single-mesh contract.
   const geometries: THREE.BufferGeometry[] = []
   for (const shape of shapes) {
     try {
-      geometries.push(new THREE.ExtrudeGeometry(shape, extrudeSettings))
+      geometries.push(applyShading(new THREE.ExtrudeGeometry(shape, extrudeSettings), g))
     } catch {
       warnings.push('A contour could not be extruded and was skipped.')
     }
@@ -194,9 +227,8 @@ export function assembleIconGeometry(parts: MultiPolygon[], g: GeometrySettings)
     return { geometry: new THREE.BufferGeometry(), warnings: ['Extrusion failed for every contour.'] }
   }
 
-  let geo =
+  const geo =
     geometries.length === 1 ? geometries[0] : mergeGeometries(geometries, false) ?? geometries[0]
-  geo = applyShading(geo, g)
 
   geo.center()
   const worldScale = 2.4 / NORMALIZED_SIZE
