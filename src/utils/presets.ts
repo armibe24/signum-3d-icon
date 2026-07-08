@@ -65,17 +65,27 @@ export function parsePreset(json: string): AppSettings {
   const e = (raw.export ?? {}) as Record<string, unknown>
   const c = (raw.camera ?? {}) as Record<string, unknown>
 
-  const iconType = str(icon.type, ['lucide', 'custom'] as const, 'lucide')
+  const iconType = str(icon.type, ['lucide', 'custom', 'text'] as const, 'lucide')
   const iconName = typeof icon.name === 'string' && icon.name ? icon.name : d.icon.name
   const iconSvg = typeof icon.svg === 'string' ? icon.svg : undefined
+  const iconText = typeof icon.text === 'string' ? icon.text.slice(0, 200) : undefined
+  const iconFont = str(
+    icon.fontId,
+    ['dm-sans', 'dm-sans-bold', 'jetbrains-mono', 'jetbrains-mono-bold'] as const,
+    'dm-sans',
+  )
   const validIcon =
     iconType === 'custom'
       ? iconSvg
         ? { type: 'custom' as const, name: iconName, svg: iconSvg }
         : d.icon
-      : hasIcon(iconName)
-        ? { type: 'lucide' as const, name: iconName }
-        : d.icon
+      : iconType === 'text'
+        ? iconText && iconText.trim()
+          ? { type: 'text' as const, name: iconName.slice(0, 24), text: iconText, fontId: iconFont }
+          : d.icon
+        : hasIcon(iconName)
+          ? { type: 'lucide' as const, name: iconName }
+          : d.icon
 
   const presetIds = [...MATERIAL_PRESETS.map((p) => p.id), 'custom']
 

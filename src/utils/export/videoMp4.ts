@@ -65,6 +65,9 @@ export async function createMp4Encoder(
       const blob = new Blob([muxer.target.buffer], { type: 'video/mp4' })
       return { blob, extension: 'mp4' }
     },
+    abort() {
+      if (encoder.state !== 'closed') encoder.close()
+    },
   }
 }
 
@@ -82,6 +85,11 @@ export async function encodeMp4Frame(
     timestamp: Math.round((index * 1e6) / fps),
     duration: Math.round(1e6 / fps),
   })
-  encoder.encode(frame, { keyFrame: index % (fps * 2) === 0 })
-  frame.close()
+  try {
+    encoder.encode(frame, { keyFrame: index % (fps * 2) === 0 })
+  } finally {
+    // ALWAYS close — leaked VideoFrames pin large pixel buffers, and a
+    // few failed export attempts in a row used to exhaust tab memory
+    frame.close()
+  }
 }

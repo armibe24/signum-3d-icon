@@ -24,6 +24,7 @@ import type { SvgWorkerRequest, SvgWorkerResponse } from '../svg/types'
 import { assembleIconGeometry, geometryLooksValid } from './mesh'
 import { geometryCache, polygonCache } from './cache'
 import { lucideSvg } from '../icons/lucide'
+import { textToSvg } from '../text/textToSvg'
 
 export interface BuildResult {
   geometry: THREE.BufferGeometry
@@ -37,7 +38,12 @@ const DEBOUNCE_MS = 120
 /** Settings that require re-running the worker 'process' stage */
 function polygonKey(s: AppSettings): string {
   const g = s.geometry
-  const iconKey = s.icon.type === 'lucide' ? `l:${s.icon.name}` : `c:${hashString(s.icon.svg ?? '')}`
+  const iconKey =
+    s.icon.type === 'lucide'
+      ? `l:${s.icon.name}`
+      : s.icon.type === 'text'
+        ? `t:${s.icon.fontId ?? 'dm-sans'}:${hashString(s.icon.text ?? '')}`
+        : `c:${hashString(s.icon.svg ?? '')}`
   return JSON.stringify([iconKey, g.strokeWidth, g.combine, g.quality, g.normalizeSize])
 }
 
@@ -122,7 +128,8 @@ class GeometryBuilder {
         parts = cachedPolys.parts
         warnings = [...cachedPolys.warnings]
       } else {
-        const svgText = this.resolveSvg(settings)
+        const svgText = await this.resolveSvg(settings)
+        if (id !== this.runId) return
         const parsed = parseSvg(svgText, g.quality, g.strokeWidth)
         const response = await this.request({
           op: 'process',
@@ -160,10 +167,13 @@ class GeometryBuilder {
     }
   }
 
-  private resolveSvg(settings: AppSettings): string {
+  private async resolveSvg(settings: AppSettings): Promise<string> {
     if (settings.icon.type === 'custom') {
       if (!settings.icon.svg) throw new Error('Custom icon has no SVG data.')
       return settings.icon.svg
+    }
+    if (settings.icon.type === 'text') {
+      return textToSvg(settings.icon.text ?? '', settings.icon.fontId ?? 'dm-sans')
     }
     const svg = lucideSvg(settings.icon.name, '#000')
     if (!svg) throw new Error(`Unknown lucide icon "${settings.icon.name}".`)

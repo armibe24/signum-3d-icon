@@ -14,6 +14,11 @@
    ============================================================ */
 
 import { icons } from 'lucide'
+// Official lucide tag metadata (vendored from lucide-static, ISC) — the same
+// data lucide.dev's search uses, so "money" finds dollar-sign, banknote, …
+import tagsJson from './lucideTags.json'
+
+const TAGS = tagsJson as Record<string, string[]>
 
 type AnyIconNode = [string, Record<string, unknown>, AnyIconNode[]?] | [string, Record<string, unknown>]
 
@@ -51,6 +56,18 @@ catalog.sort((a, b) => a.id.localeCompare(b.id))
 
 const byId = new Map(catalog.map((e) => [flat(e.id), e]))
 
+// searchable text per icon: flattened id + flattened official tags
+const searchText = new Map<string, string>()
+{
+  const tagsByFlat = new Map<string, string[]>()
+  for (const [officialId, tags] of Object.entries(TAGS)) tagsByFlat.set(flat(officialId), tags)
+  for (const e of catalog) {
+    const tags = tagsByFlat.get(flat(e.id)) ?? []
+    const flatTags = tags.map((t) => t.toLowerCase().replace(/[\s-]+/g, '')).join(' ')
+    searchText.set(e.id, `${flat(e.id)} ${flatTags}`)
+  }
+}
+
 // debug-safe sanity check: makes it obvious how many icons are indexed
 // (the lucide `icons` export contains only icon data, so no filtering is
 // needed — every key is a real icon or an alias of one)
@@ -63,24 +80,37 @@ export function allIcons(): IconEntry[] {
 }
 
 /**
- * Search the FULL catalog (all bundled lucide icons, not just the visible
- * page). Terms are matched loosely: "arrowup", "arrow up" and "arrow-up"
- * all hit "arrow-up". Exact-prefix matches sort first.
+ * Search the FULL catalog — icon names AND the official lucide tags, like
+ * the search on lucide.dev ("money" → dollar-sign, banknote, piggy-bank…).
+ * Terms match loosely ("arrow up" ≙ "arrow-up"); every term must hit the
+ * name or a tag. Name matches rank above tag-only matches, name prefixes
+ * first of all.
  */
 export function searchIcons(query: string): IconEntry[] {
   const q = query.trim().toLowerCase()
   if (!q) return catalog
   const terms = q.split(/\s+/).map((t) => t.replace(/-/g, ''))
-  const matches = catalog.filter((e) => {
-    const flat = e.id.replace(/-/g, '')
-    return terms.every((t) => flat.includes(t))
-  })
-  const first = terms[0]
-  return matches.sort((a, b) => {
-    const ap = a.id.replace(/-/g, '').startsWith(first) ? 0 : 1
-    const bp = b.id.replace(/-/g, '').startsWith(first) ? 0 : 1
-    return ap - bp || a.id.localeCompare(b.id)
-  })
+
+  const scored: { entry: IconEntry; score: number }[] = []
+  for (const e of catalog) {
+    const flatId = flat(e.id)
+    const text = searchText.get(e.id) ?? flatId
+    let ok = true
+    let score = 2 // tag-only match
+    for (const t of terms) {
+      if (!text.includes(t)) {
+        ok = false
+        break
+      }
+    }
+    if (!ok) continue
+    if (terms.every((t) => flatId.includes(t))) score = 1 // name match
+    if (flatId.startsWith(terms[0])) score = 0 // name prefix
+    scored.push({ entry: e, score })
+  }
+  return scored
+    .sort((a, b) => a.score - b.score || a.entry.id.localeCompare(b.entry.id))
+    .map((s) => s.entry)
 }
 
 export function hasIcon(id: string): boolean {

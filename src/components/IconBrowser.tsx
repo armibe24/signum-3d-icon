@@ -9,6 +9,9 @@ import { searchIcons, lucideSvg } from '../icons/lucide'
 import { setSlice, store, useStore } from '../store/store'
 import { pickFile, readFileText } from '../utils/file'
 import { Icon } from './common/Icon'
+import { Select } from './common/Select'
+import { TEXT_FONTS } from '../text/textToSvg'
+import type { TextFontId } from '../types'
 
 /** page size — search always runs over the FULL catalog, this only
     limits how many previews are mounted at once */
@@ -47,6 +50,22 @@ export function IconBrowser() {
   const [limit, setLimit] = useState(GRID_PAGE)
   const icon = useStore((s) => s.settings.icon)
   const warnings = useStore((s) => s.warnings)
+  const [textDraft, setTextDraft] = useState(icon.type === 'text' ? (icon.text ?? '') : '')
+  const [fontDraft, setFontDraft] = useState<TextFontId>(
+    icon.type === 'text' ? (icon.fontId ?? 'dm-sans') : 'dm-sans',
+  )
+
+  const applyText = (text: string, fontId: TextFontId) => {
+    const clean = text.trim()
+    if (!clean) return
+    setSlice('icon', {
+      type: 'text',
+      name: clean.replace(/\s+/g, ' ').slice(0, 24),
+      text,
+      fontId,
+      svg: undefined,
+    })
+  }
 
   // search covers the whole bundled lucide set (~1,500 icons)
   const results = useMemo(() => searchIcons(query), [query])
@@ -97,7 +116,47 @@ export function IconBrowser() {
             ? `${results.length} match${results.length === 1 ? '' : 'es'}`
             : `all ${results.length} searchable`}
         </span>
-        <b>{icon.type === 'custom' ? `custom: ${icon.name}` : icon.name}</b>
+        <b>
+          {icon.type === 'custom' ? `custom: ${icon.name}` : icon.type === 'text' ? `text: ${icon.name}` : icon.name}
+        </b>
+      </div>
+
+      <div className="control" style={{ marginTop: 4 }}>
+        <div className="control-head">
+          <span className="control-label">3D text (local fonts)</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <input
+            className="colorfield-hexinput"
+            style={{ letterSpacing: '.02em' }}
+            placeholder="Type text to extrude…"
+            value={textDraft}
+            spellCheck={false}
+            onChange={(e) => setTextDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') applyText(textDraft, fontDraft)
+              e.stopPropagation()
+            }}
+          />
+          <Select
+            value={fontDraft}
+            options={TEXT_FONTS.map((f) => ({ value: f.id, label: f.label }))}
+            onChange={(v) => {
+              setFontDraft(v)
+              if (icon.type === 'text' && textDraft.trim()) applyText(textDraft, v)
+            }}
+          />
+          <button
+            type="button"
+            className="btn btn--sm"
+            style={{ justifyContent: 'center' }}
+            disabled={!textDraft.trim()}
+            onClick={() => applyText(textDraft, fontDraft)}
+          >
+            <Icon name="type" size={12} strokeWidth={2.2} />
+            Use text
+          </button>
+        </div>
       </div>
 
       <div className="import-btns">

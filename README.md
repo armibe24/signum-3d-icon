@@ -105,9 +105,15 @@ export, so exported frames match the preview exactly and a keyframe timeline can
   transparent/checkerboard/solid/gradient/studio backgrounds, floor shadow with soft option
   (off by default for performance), processing indicator, responsive resize.
 - **Icons**: searchable browser over the full bundled lucide set (~1,700 entries) with live grid
-  previews, paged grid with "show more", empty state; custom SVG import via button or drag & drop;
-  complexity/unsupported-feature warnings. All app UI icons also come from the local lucide data
-  (`src/components/common/Icon.tsx`) — no remote assets.
+  previews, paged grid with "show more", empty state; **tag-aware search** — the official lucide
+  tag metadata is vendored (`src/icons/lucideTags.json`, ISC) so "money" finds dollar-sign,
+  banknote, coins… exactly like lucide.dev, not just exact-name matches; custom SVG import via
+  button or drag & drop; complexity/unsupported-feature warnings. All app UI icons also come from
+  the local lucide data (`src/components/common/Icon.tsx`) — no remote assets.
+- **3D text**: type any text and extrude it through the same SVG→3D pipeline. Fonts are the app's
+  own families bundled as local TTFs (`src/assets/fonts3d/`, SIL OFL), parsed with opentype.js —
+  no network, identical output inside an Electron shell. Multi-line supported; glyph holes
+  (a/b/e/o…) resolve correctly.
 - **Typography**: DM Sans (UI) and JetBrains Mono (technical text) ship as local woff2 files in
   `src/assets/fonts/` with their OFL licenses — no external font requests.
 - **Geometry**: stroke width, extrude depth, bevel style (none / hard / rounded) with

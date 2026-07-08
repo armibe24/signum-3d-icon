@@ -56,5 +56,8 @@ export async function createWebmEncoder(
       const blob = new Blob([muxer.target.buffer], { type: 'video/webm' })
       return { blob, extension: 'webm' }
     },
+    abort() {
+      if (encoder.state !== 'closed') encoder.close()
+    },
   }
 }

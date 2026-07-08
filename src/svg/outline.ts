@@ -34,11 +34,16 @@ export function simplifyPolyline(points: Pair[], epsilon: number): Pair[] {
     for (let i = a + 1; i < b; i++) {
       const [px, py] = points[i]
       let dist: number
-      if (len2 === 0) {
+      // Near-degenerate anchor segments (e.g. the coincident endpoints of a
+      // CLOSED ring — circles!) make the line direction numerically
+      // meaningless; fall back to point distance. The distance itself is
+      // computed from RELATIVE coordinates — the textbook absolute-product
+      // form (bx·ay − by·ax) cancels catastrophically for coordinates far
+      // from the origin and silently collapsed small circles to 2 points.
+      if (len2 < 1e-12) {
         dist = Math.hypot(px - ax, py - ay)
       } else {
-        // perpendicular distance to segment line
-        dist = Math.abs(dy * px - dx * py + bx * ay - by * ax) / Math.sqrt(len2)
+        dist = Math.abs(dx * (py - ay) - dy * (px - ax)) / Math.sqrt(len2)
       }
       if (dist > maxDist) {
         maxDist = dist

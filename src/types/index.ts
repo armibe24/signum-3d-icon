@@ -5,12 +5,18 @@
    what undo history snapshots and JSON presets serialize.
    ============================================================ */
 
+export type TextFontId = 'dm-sans' | 'dm-sans-bold' | 'jetbrains-mono' | 'jetbrains-mono-bold'
+
 export interface IconSource {
-  type: 'lucide' | 'custom'
-  /** lucide icon id (kebab-case) or imported file name */
+  type: 'lucide' | 'custom' | 'text'
+  /** lucide icon id (kebab-case), imported file name, or text label */
   name: string
   /** raw SVG markup for custom imports */
   svg?: string
+  /** the text to extrude (type 'text') */
+  text?: string
+  /** bundled local font for text (type 'text') */
+  fontId?: TextFontId
 }
 
 export type GeometryQuality = 'fast' | 'balanced' | 'high'

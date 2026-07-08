@@ -16,7 +16,7 @@
      format switch below is where it would slot in later.
    ============================================================ */
 
-import type { AppSettings, BackgroundSettings } from '../../types'
+import type { AnimFormat, AppSettings, BackgroundSettings } from '../../types'
 import { backgroundHasAlpha } from '../../engine/background'
 import { normalizePlayTime } from '../../engine/animation'
 import { store } from '../../store/store'
@@ -37,6 +37,39 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
 }
 
+/** Exports right after a parameter change should capture the REBUILT
+    icon — wait briefly for a running geometry rebuild to settle. */
+async function waitForGeometry(maxMs = 6000): Promise<void> {
+  const t0 = performance.now()
+  while (store.get().processing && performance.now() - t0 < maxMs) {
+    await sleep(100)
+  }
+}
+
+/**
+ * Memory guardrail. GIF and PNG-sequence exports retain data proportional
+ * to width·height·frames (quantization buffers / encoded frames); without
+ * a cap, large sizes × long durations exhaust tab memory and crash the
+ * page mid-export. Video encoders only retain the compressed stream, so
+ * their budget is much higher.
+ */
+const PIXEL_BUDGET: Record<AnimFormat, number> = {
+  gif: 6.5e8, //  e.g. 1024² ≈ 20s @ 30fps
+  'png-seq': 1.6e9, // e.g. 2048² ≈ 12s @ 30fps
+  mp4: 8e9,
+  webm: 8e9,
+}
+
+function checkExportBudget(format: AnimFormat, width: number, height: number, frames: number): string | null {
+  const load = width * height * frames
+  if (load <= PIXEL_BUDGET[format]) return null
+  const maxFrames = Math.max(1, Math.floor(PIXEL_BUDGET[format] / (width * height)))
+  return (
+    `This ${format.toUpperCase()} export (${frames} frames at ${width}×${height}) would exhaust browser memory. ` +
+    `At this size, keep it under ~${maxFrames} frames — lower the duration/FPS or the export size.`
+  )
+}
+
 /** mp4/webm cannot carry alpha — fall back to the studio backdrop */
 function videoSafeBackground(b: BackgroundSettings): BackgroundSettings {
   if (backgroundHasAlpha(b)) return { ...b, mode: 'studio' }
@@ -45,6 +78,7 @@ function videoSafeBackground(b: BackgroundSettings): BackgroundSettings {
 
 export async function exportStill(settings: AppSettings): Promise<void> {
   const { width, height, stillFormat } = settings.export
+  await waitForGeometry()
   const ex = new ExportRenderer(width, height)
   try {
     // JPG has no alpha either — bake the studio backdrop
@@ -69,6 +103,15 @@ export async function exportAnimation(settings: AppSettings): Promise<void> {
   const frameCount = Math.max(1, Math.round(fps * duration))
   const name = safeFileName(settings.icon.name)
 
+  // memory guardrail BEFORE any resources are allocated
+  const budgetError = checkExportBudget(animFormat, width, height, frameCount)
+  if (budgetError) {
+    store.toast(budgetError, 'error')
+    return
+  }
+
+  await waitForGeometry()
+
   const aborter = new AbortController()
   const setProgress = (p: number, label: string) =>
     store.setTransient({ exportJob: { label, progress: p, cancel: () => aborter.abort() } })
@@ -80,10 +123,12 @@ export async function exportAnimation(settings: AppSettings): Promise<void> {
       ? videoSafeBackground(settings.background)
       : settings.background
 
+  let encoder: AnimationEncoder | null = null
+  let finished = false
   try {
     setProgress(0, `Rendering ${animFormat.toUpperCase()}…`)
 
-    const encoder = await (async () => {
+    encoder = await (async () => {
       switch (animFormat) {
         case 'mp4':
           return createMp4Encoder(width, height, fps)
@@ -109,15 +154,26 @@ export async function exportAnimation(settings: AppSettings): Promise<void> {
     if (aborter.signal.aborted) throw new Error('cancelled')
     setProgress(0.95, 'Finalizing…')
     const { blob, extension } = await encoder.finish()
+    finished = true
     downloadBlob(blob, `${name}-${width}x${height}.${extension}`)
     store.toast(`Exported ${animFormat.toUpperCase()} — ${frameCount} frames`)
   } catch (e) {
     if (e instanceof Error && e.message === 'cancelled') {
       store.toast('Export cancelled')
     } else {
+      console.warn('[export] animation export failed:', e)
       store.toast(e instanceof Error ? e.message : 'Export failed', 'error')
     }
   } finally {
+    // release encoder resources on cancel/failure — leaked VideoEncoders
+    // and workers accumulating across attempts eventually crash the tab
+    if (!finished && encoder) {
+      try {
+        encoder.abort()
+      } catch {
+        /* already gone */
+      }
+    }
     ex.dispose()
     store.setTransient({ exportJob: null })
   }
@@ -126,6 +182,8 @@ export async function exportAnimation(settings: AppSettings): Promise<void> {
 export interface AnimationEncoder {
   addFrame(ex: ExportRenderer, index: number): Promise<void>
   finish(): Promise<{ blob: Blob; extension: string }>
+  /** release all resources without producing output (cancel / failure) */
+  abort(): void
 }
 
 export { encodeMp4Frame }

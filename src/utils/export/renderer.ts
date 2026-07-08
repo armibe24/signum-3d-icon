@@ -91,17 +91,34 @@ export class ExportRenderer {
     })
   }
 
-  /** RGBA pixel read for the GIF encoder (alpha preserved). */
+  private readback: { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null = null
+
+  /** RGBA pixel read for the GIF encoder (alpha preserved). The 2D
+      readback canvas is created ONCE and reused — allocating a fresh
+      full-size canvas per frame caused enough GC/memory pressure on
+      long, large exports to crash the tab. */
   readPixels(): ImageData {
-    const c = document.createElement('canvas')
-    c.width = this.width
-    c.height = this.height
-    const ctx = c.getContext('2d', { willReadFrequently: true })!
+    if (!this.readback) {
+      const canvas = document.createElement('canvas')
+      canvas.width = this.width
+      canvas.height = this.height
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })
+      if (!ctx) throw new Error('Could not create a 2D readback context.')
+      this.readback = { canvas, ctx }
+    }
+    const { ctx } = this.readback
+    ctx.clearRect(0, 0, this.width, this.height)
     ctx.drawImage(this.canvas, 0, 0)
     return ctx.getImageData(0, 0, this.width, this.height)
   }
 
   dispose(): void {
+    if (this.readback) {
+      // release the backing store immediately instead of waiting for GC
+      this.readback.canvas.width = 0
+      this.readback.canvas.height = 0
+      this.readback = null
+    }
     this.env.dispose()
     this.renderer.dispose()
     this.renderer.forceContextLoss()
