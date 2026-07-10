@@ -29,7 +29,14 @@ import { NORMALIZED_SIZE } from '../svg/normalize'
 export interface AssembledGeometry {
   geometry: THREE.BufferGeometry
   warnings: string[]
+  /** number of disconnected parts (= material groups) in the geometry */
+  partCount: number
 }
+
+/** Per-part colors drive one material per group; cap the group count so a
+    pathological icon can't spawn hundreds of draw calls. Parts beyond the
+    cap share the last group. */
+export const MAX_PART_MATERIALS = 32
 
 /* ------------------------------------------------------------------ */
 /* contour cleaning — ported from the reference implementation         */
@@ -105,7 +112,7 @@ function polygonsToShapes(parts: MultiPolygon[]): THREE.Shape[] {
   const minDist = diag * 0.0005 // ~0.05% of bbox diagonal
   const collinearEps = 0.0015 // angular flatness threshold
 
-  const shapes: THREE.Shape[] = []
+  const entries: { shape: THREE.Shape; area: number }[] = []
   for (const part of parts) {
     for (const poly of part) {
       if (!poly.length) continue
@@ -116,10 +123,14 @@ function polygonsToShapes(parts: MultiPolygon[]): THREE.Shape[] {
         const hole = cleanPoints(toVectors(poly[h]), minDist, collinearEps)
         if (hole.length >= 3) shape.holes.push(new THREE.Path(hole))
       }
-      shapes.push(shape)
+      entries.push({ shape, area: Math.abs(THREE.ShapeUtils.area(outer)) })
     }
   }
-  return shapes
+  // largest part first — gives every disconnected part a stable index that
+  // per-part colors can address across rebuilds (sort is stable, so equal
+  // areas keep their contour order)
+  entries.sort((a, b) => b.area - a.area)
+  return entries.map((e) => e.shape)
 }
 
 /* ------------------------------------------------------------------ */
@@ -196,7 +207,7 @@ export function assembleIconGeometry(parts: MultiPolygon[], g: GeometrySettings)
   const warnings: string[] = []
   const shapes = polygonsToShapes(parts)
   if (!shapes.length) {
-    return { geometry: new THREE.BufferGeometry(), warnings: ['No usable contours to extrude.'] }
+    return { geometry: new THREE.BufferGeometry(), warnings: ['No usable contours to extrude.'], partCount: 0 }
   }
 
   const depth = Math.max(g.extrudeDepth, 0.1)
@@ -221,28 +232,40 @@ export function assembleIconGeometry(parts: MultiPolygon[], g: GeometrySettings)
   // one geometry per shape (like the reference's one mesh per shape).
   // Shading runs PER SHAPE — it needs the cap/side vertex groups, which
   // a merge would discard — then everything is merged so the rest of the
-  // app keeps its single-mesh contract.
+  // app keeps its single-mesh contract. Each shape IS one disconnected
+  // part, so the merge re-adds one group per shape: that group's
+  // materialIndex is the part's slot in the per-part color list.
   const geometries: THREE.BufferGeometry[] = []
   for (const shape of shapes) {
     try {
-      geometries.push(applyShading(new THREE.ExtrudeGeometry(shape, extrudeSettings), g))
+      const shaded = applyShading(new THREE.ExtrudeGeometry(shape, extrudeSettings), g)
+      shaded.clearGroups() // drop ExtrudeGeometry's cap/side groups — parts are the unit now
+      geometries.push(shaded)
     } catch {
       warnings.push('A contour could not be extruded and was skipped.')
     }
   }
   if (!geometries.length) {
-    return { geometry: new THREE.BufferGeometry(), warnings: ['Extrusion failed for every contour.'] }
+    return { geometry: new THREE.BufferGeometry(), warnings: ['Extrusion failed for every contour.'], partCount: 0 }
   }
 
   const geo =
-    geometries.length === 1 ? geometries[0] : mergeGeometries(geometries, false) ?? geometries[0]
+    geometries.length === 1 ? geometries[0] : mergeGeometries(geometries, true) ?? geometries[0]
+  if (!geo.groups.length) {
+    geo.addGroup(0, geo.getAttribute('position').count, 0)
+  }
+  for (const group of geo.groups) {
+    group.materialIndex = Math.min(group.materialIndex ?? 0, MAX_PART_MATERIALS - 1)
+  }
+  const partCount = Math.max(...geo.groups.map((gr) => (gr.materialIndex ?? 0) + 1))
+  geo.userData.partCount = partCount // travels with the geometry through the cache
 
   geo.center()
   const worldScale = 2.4 / NORMALIZED_SIZE
   geo.scale(worldScale, worldScale, worldScale)
   geo.computeBoundingBox()
   geo.computeBoundingSphere()
-  return { geometry: geo, warnings }
+  return { geometry: geo, warnings, partCount }
 }
 
 /** Sanity check used by the build orchestrator to warn instead of

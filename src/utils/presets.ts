@@ -116,6 +116,10 @@ export function parsePreset(json: string): AppSettings {
         d.material.mode,
       ),
       color: color(m.color, d.material.color),
+      // per-part overrides: keep valid hex entries, '' = follow base color
+      partColors: Array.isArray(m.partColors)
+        ? m.partColors.slice(0, 64).map((v) => (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v.toLowerCase() : ''))
+        : [],
       roughness: num(m.roughness, d.material.roughness, 0, 1),
       metalness: num(m.metalness, d.material.metalness, 0, 1),
       opacity: num(m.opacity, d.material.opacity, 0.05, 1),

@@ -194,7 +194,8 @@ class GeometryBuilder {
       if (prev) prev.inUse = false
     }
     this.currentGeoKey = gKey
-    store.setTransient({ processing: false, warnings })
+    const partCount = Math.max(Number(geometry.userData.partCount) || 1, 1)
+    store.setTransient({ processing: false, warnings, partCount })
     if (warnings.length) {
       store.toast(warnings[0], 'info')
     }

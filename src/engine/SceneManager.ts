@@ -37,7 +37,10 @@ export class SceneManager {
   /** pivot carries the animation pose; mesh carries user scale */
   private pivot = new THREE.Group()
   private mesh: THREE.Mesh
-  private material = createIconMaterial()
+  /** one material per disconnected part (geometry group); index 0 always exists */
+  private materials: THREE.MeshPhysicalMaterial[] = [createIconMaterial()]
+  /** last applied settings — re-applied when a new geometry changes the part count */
+  private lastMaterialSettings: MaterialSettings | null = null
   private rig: LightRig
   private ground: THREE.Mesh
   private grid: THREE.GridHelper
@@ -59,7 +62,7 @@ export class SceneManager {
   private exportAspect = 1
 
   constructor() {
-    this.mesh = new THREE.Mesh(new THREE.BufferGeometry(), this.material)
+    this.mesh = new THREE.Mesh(new THREE.BufferGeometry(), this.materials)
     this.mesh.castShadow = true
     this.mesh.receiveShadow = false
     this.pivot.add(this.mesh)
@@ -133,7 +136,7 @@ export class SceneManager {
     this.resizeObserver?.disconnect()
     this.controls?.dispose()
     this.mesh.geometry.dispose()
-    this.material.dispose()
+    for (const mat of this.materials) mat.dispose()
     this.envTexture?.dispose()
     this.renderer?.dispose()
     this.renderer?.domElement.remove()
@@ -165,9 +168,27 @@ export class SceneManager {
 
   /** Swap in a new icon geometry. Caller (cache) owns disposal. */
   setGeometry(geometry: THREE.BufferGeometry): void {
+    // a mesh with a material ARRAY renders only grouped ranges — make sure
+    // even legacy/fallback geometry has at least one full-range group
+    if (!geometry.groups.length) {
+      geometry.addGroup(0, geometry.getAttribute('position')?.count ?? 0, 0)
+    }
     this.mesh.geometry = geometry
+    this.syncMaterialCount()
     this.meshBaseRadius = geometry.boundingSphere?.radius ?? 1
     this.updateGroundPosition()
+  }
+
+  /** Grow/shrink the material array to match the geometry's part groups. */
+  private syncMaterialCount(): void {
+    let needed = 1
+    for (const group of this.mesh.geometry.groups) {
+      needed = Math.max(needed, (group.materialIndex ?? 0) + 1)
+    }
+    if (needed === this.materials.length) return
+    while (this.materials.length > needed) this.materials.pop()!.dispose()
+    while (this.materials.length < needed) this.materials.push(createIconMaterial())
+    if (this.lastMaterialSettings) this.applyMaterial(this.lastMaterialSettings)
   }
 
   setUserScale(scale: number): void {
@@ -187,7 +208,8 @@ export class SceneManager {
   /* ---------------- settings appliers (no geometry rebuild) ---------------- */
 
   applyMaterial(m: MaterialSettings): void {
-    applyMaterialSettings(this.material, m)
+    this.lastMaterialSettings = m
+    this.materials.forEach((mat, i) => applyMaterialSettings(mat, m, i))
   }
 
   applyLighting(l: LightingSettings): void {

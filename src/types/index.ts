@@ -60,6 +60,9 @@ export interface MaterialSettings {
   preset: string
   mode: MaterialMode
   color: string
+  /** per-part color overrides, indexed by disconnected-part (largest part
+      first); missing or empty ('') entries fall back to `color` */
+  partColors: string[]
   roughness: number
   metalness: number
   opacity: number
@@ -188,6 +191,7 @@ export function defaultSettings(): AppSettings {
       preset: 'soft-plastic',
       mode: 'plastic',
       color: '#5fc6e8',
+      partColors: [],
       roughness: 0.28,
       metalness: 0,
       opacity: 1,

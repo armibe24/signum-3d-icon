@@ -63,6 +63,8 @@ export interface AppState {
   openSection: string | null
   /** viewport camera zoom relative to the default distance, percent */
   zoomPct: number
+  /** number of disconnected parts in the current geometry (per-part colors) */
+  partCount: number
   prefs: UiPrefs
   canUndo: boolean
   canRedo: boolean
@@ -81,6 +83,7 @@ let state: AppState = {
   toast: null,
   openSection: null,
   zoomPct: 100,
+  partCount: 1,
   prefs: loadPrefs(),
   canUndo: false,
   canRedo: false,

@@ -123,7 +123,10 @@ export, so exported frames match the preview exactly and a keyframe timeline can
 - **Material**: 8 presets (black/silver/gold metal, white clay, soft plastic, neon glow, dark
   glossy, warm matte) + 8 modes (solid, clay, plastic, metal, chrome, soft metallic, glassy,
   emissive); base/emissive color, roughness, metalness, opacity, clearcoat, emissive intensity,
-  environment intensity; image-based lighting from a procedural room environment.
+  environment intensity; image-based lighting from a procedural room environment. **Per-part
+  colors**: when an icon consists of multiple disconnected parts (e.g. the three ellipsis dots,
+  or every glyph of a 3D text), each part gets its own color field — parts are indexed largest
+  first, unset parts follow the base color, and color changes never trigger a geometry rebuild.
 - **Lighting**: studio / softbox / dramatic side / top presets; ambient, key, fill, rim
   intensities; key light azimuth/elevation; shadows + soft shadows.
 - **Animation**: static, spin X/Y, turntable, slow turn, wobble, floating wobble, reveal

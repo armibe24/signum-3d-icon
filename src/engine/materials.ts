@@ -29,7 +29,8 @@ export const MATERIAL_MODES: MaterialModeDef[] = [
 export interface MaterialPresetDef {
   id: string
   label: string
-  values: Omit<MaterialSettings, 'preset'>
+  /** presets set the shared surface values; per-part color overrides persist */
+  values: Omit<MaterialSettings, 'preset' | 'partColors'>
 }
 
 const base = { opacity: 1, emissiveColor: '#46e0ff', emissiveIntensity: 0, clearcoat: 0, envIntensity: 1 }
@@ -49,8 +50,13 @@ export function createIconMaterial(): THREE.MeshPhysicalMaterial {
   return new THREE.MeshPhysicalMaterial()
 }
 
-export function applyMaterialSettings(mat: THREE.MeshPhysicalMaterial, m: MaterialSettings): void {
-  mat.color.set(m.color)
+/**
+ * Apply the shared material settings, then the per-part color override for
+ * `partIndex` (empty/missing entries keep the base color). Every part shares
+ * everything except color, so multi-part icons still read as one material.
+ */
+export function applyMaterialSettings(mat: THREE.MeshPhysicalMaterial, m: MaterialSettings, partIndex = 0): void {
+  mat.color.set(m.partColors?.[partIndex] || m.color)
   mat.roughness = m.roughness
   mat.metalness = m.metalness
   mat.clearcoat = m.clearcoat

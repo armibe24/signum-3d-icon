@@ -12,6 +12,17 @@ function edit(patch: Partial<MaterialSettings>) {
 
 export function MaterialControls() {
   const m = useStore((s) => s.settings.material)
+  const partCount = useStore((s) => s.partCount)
+
+  /** set one part's color; untouched parts stay '' = follow the base color */
+  const setPartColor = (index: number, hex: string) => {
+    const next = Array.from(
+      { length: Math.max(m.partColors.length, index + 1) },
+      (_, j) => m.partColors[j] ?? '',
+    )
+    next[index] = hex
+    edit({ partColors: next })
+  }
 
   return (
     <div className="side-rows">
@@ -45,6 +56,35 @@ export function MaterialControls() {
         }} />
 
       <ColorField label="Base color" value={m.color} onChange={(c) => edit({ color: c })} />
+
+      {partCount > 1 && (
+        <div className="control">
+          <div className="control-head">
+            <span className="control-label">Part colors — {partCount} parts</span>
+          </div>
+          <div className="side-rows" style={{ gap: 8 }}>
+            {Array.from({ length: partCount }, (_, i) => (
+              <ColorField
+                key={i}
+                label={`Part ${i + 1}${i === 0 ? ' (largest)' : ''}`}
+                value={m.partColors[i] || m.color}
+                onChange={(c) => setPartColor(i, c)}
+              />
+            ))}
+            {m.partColors.some(Boolean) && (
+              <button
+                type="button"
+                className="btn btn--sm"
+                style={{ justifyContent: 'center' }}
+                onClick={() => edit({ partColors: [] })}
+              >
+                Reset part colors
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <Slider label="Roughness" value={m.roughness} min={0} max={1} onChange={(v) => edit({ roughness: v })} />
       <Slider label="Metalness" value={m.metalness} min={0} max={1} onChange={(v) => edit({ metalness: v })} />
       <Slider label="Opacity" value={m.opacity} min={0.05} max={1} onChange={(v) => edit({ opacity: v })} />
