@@ -153,8 +153,9 @@ export, so exported frames match the preview exactly and a keyframe timeline can
   start/end rotation; play/pause (preview never autoplays); Sonitus-style timeline with
   transport cluster, frame stepping, scrubbing, frame counter and time readout.
 - **Export**: PNG (alpha) / JPG / WebP stills at 512/1024/2048/custom; PNG sequence (ZIP, alpha),
-  GIF (1-bit alpha), MP4 (H.264 via WebCodecs), WebM (VP9); deterministic frame timing; progress
-  bar + cancel; UI stays responsive during export.
+  GIF (1-bit alpha, optional ordered dithering — frame-stable Bayer pattern that smooths the
+  256-color gradient banding), MP4 (H.264 via WebCodecs), WebM (VP9); deterministic frame timing;
+  progress bar + cancel; UI stays responsive during export.
 - **Presets & project**: full-state JSON save/load with validation and clamping (icon, geometry,
   material, lighting, background, animation, camera, export settings); new/reset project.
 - **Session autosave**: every adjustment is continuously saved to localStorage (validated on

@@ -1,5 +1,6 @@
 import { Select } from './common/Select'
 import { NumField } from './common/NumField'
+import { Toggle } from './common/Toggle'
 import { Icon } from './common/Icon'
 import { setSlice, useStore } from '../store/store'
 import { exportAnimation, exportStill } from '../utils/export/exporter'
@@ -10,7 +11,7 @@ const SIZE_MAP: Record<Exclude<SizePresetId, 'custom'>, number> = { '512': 512, 
 
 const FORMAT_NOTES: Record<string, string> = {
   'png-seq': 'PNG sequence (ZIP) — full 8-bit transparency, most reliable.',
-  gif: 'GIF — 1-bit transparency (hard pixel edges), colors quantized to 256.',
+  gif: 'GIF — 1-bit transparency (hard pixel edges), colors quantized to 256. Dithering smooths gradient banding with a fine, frame-stable pixel pattern.',
   mp4: 'MP4 (H.264 via WebCodecs) — no alpha; transparent backgrounds are baked over the studio backdrop.',
   webm: 'WebM (VP9) — no alpha in Chrome’s encoder; transparent backgrounds are baked over the studio backdrop.',
 }
@@ -63,6 +64,10 @@ export function ExportPanel() {
           { value: 'webm', label: 'WebM (VP9)' },
         ]}
         onChange={(v) => setSlice('export', { animFormat: v })} />
+      {ex.animFormat === 'gif' && (
+        <Toggle label="Dithering" checked={ex.gifDither}
+          onChange={(v) => setSlice('export', { gifDither: v })} />
+      )}
       <p className="export-note">{FORMAT_NOTES[ex.animFormat]}</p>
       <p className="export-note">
         MOV with alpha is not possible with browser-only encoders — use the PNG sequence and convert

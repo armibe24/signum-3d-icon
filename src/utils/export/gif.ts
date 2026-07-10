@@ -13,6 +13,7 @@ export function createGifEncoder(
   height: number,
   fps: number,
   transparent: boolean,
+  dither: boolean,
 ): AnimationEncoder {
   const worker = new Worker(new URL('../../workers/gifWorker.ts', import.meta.url), {
     type: 'module',
@@ -44,6 +45,7 @@ export function createGifEncoder(
     height,
     delayMs: Math.round(1000 / fps),
     transparent,
+    dither,
   })
 
   return {

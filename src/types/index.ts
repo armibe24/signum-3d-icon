@@ -140,6 +140,8 @@ export interface ExportSettings {
   sizePreset: SizePresetId
   width: number
   height: number
+  /** GIF only: ordered dithering to smooth the ≤256-color banding */
+  gifDither: boolean
 }
 
 export interface CameraState {
@@ -230,6 +232,7 @@ export function defaultSettings(): AppSettings {
       sizePreset: '1024',
       width: 1024,
       height: 1024,
+      gifDither: false,
     },
     camera: { ...DEFAULT_CAMERA },
   }

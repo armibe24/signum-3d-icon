@@ -169,6 +169,7 @@ export function parsePreset(json: string): AppSettings {
       sizePreset: str(e.sizePreset, ['512', '1024', '2048', 'custom'] as const, d.export.sizePreset),
       width: Math.round(num(e.width, d.export.width, 16, 4096)),
       height: Math.round(num(e.height, d.export.height, 16, 4096)),
+      gifDither: bool(e.gifDither, d.export.gifDither),
     },
     camera: {
       position: [

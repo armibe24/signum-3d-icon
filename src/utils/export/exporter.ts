@@ -148,7 +148,7 @@ export async function exportAnimation(settings: AppSettings): Promise<void> {
         case 'webm':
           return createWebmEncoder(width, height, fps)
         case 'gif':
-          return createGifEncoder(width, height, fps, alpha)
+          return createGifEncoder(width, height, fps, alpha, settings.export.gifDither)
         case 'png-seq':
           return createPngSequenceCollector()
       }
