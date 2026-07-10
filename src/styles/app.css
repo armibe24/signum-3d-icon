@@ -112,6 +112,9 @@
 .vp-chip--icon svg{display:block}
 .vp-chip.active{color:#03161c;background:linear-gradient(180deg,#7fdcf4,#46b3cc);
   box-shadow:var(--gloss-inset),0 3px 10px rgba(70,179,204,.45)}
+.vp-chip--label{display:inline-flex;align-items:center;color:var(--ink-dim);
+  padding:.42rem .3rem .42rem .55rem;cursor:default}
+.vp-chip--label:hover{background:none;color:var(--ink-dim)}
 .vp-readout{font-family:var(--font-mono);font-size:.6rem;font-weight:600;letter-spacing:.08em;
   color:var(--ink-dim);padding:.42rem .5rem;min-width:52px;text-align:center}
 

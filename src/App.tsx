@@ -19,6 +19,7 @@ import { sceneManager } from './engine/SceneManager'
 import { geometryBuilder } from './geometry/build'
 import { store } from './store/store'
 import { normalizePlayTime } from './engine/animation'
+import { restoreSession, startSessionAutosave } from './utils/session'
 
 let wired = false
 
@@ -26,6 +27,11 @@ let wired = false
 function wireEngine() {
   if (wired) return
   wired = true
+
+  // bring back the last session BEFORE the first build, so a crash or
+  // reload never costs the user their adjustments
+  restoreSession()
+  startSessionAutosave()
 
   geometryBuilder.onGeometry(({ geometry }) => {
     sceneManager.setGeometry(geometry)

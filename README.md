@@ -18,9 +18,27 @@ npm run dev        # → http://localhost:5173
 Other scripts: `npm run build` (typecheck + production build to `dist/`), `npm run preview`,
 `npm run typecheck`.
 
-Tested in Google Chrome. The app is a plain web app — no Electron-specific code — but it is
-Electron-friendly: relative asset paths (`base: './'`), a `100%`-height layout chain instead of
-`vh` units, and no server dependency.
+Tested in Google Chrome. The web app contains no Electron-specific code, but ships with a ready
+desktop shell (see below): relative asset paths (`base: './'`), a `100%`-height layout chain
+instead of `vh` units, and no server dependency.
+
+## Desktop app (Electron)
+
+The repo includes a complete Electron shell in `electron/`:
+
+```bash
+npm run electron:preview   # build the web app, then open it in the Electron shell
+npm run electron:build     # build + package installers into release/ (electron-builder)
+npm run dev                # …and in a second terminal:
+npm run electron:dev       # Electron pointed at the Vite dev server (HMR)
+```
+
+The shell serves the unmodified `dist/` bundle through a privileged custom scheme (`app://`)
+instead of `file://` — required because the app uses module Web Workers (geometry + GIF encoding)
+and `fetch()`es its bundled 3D-text fonts, both of which Chromium denies to `file://` pages. The
+renderer runs fully sandboxed (context isolation on, node integration off); exports open a native
+save dialog. Packaging targets are preconfigured in `package.json → build` (Windows NSIS, macOS
+DMG, Linux AppImage).
 
 ## How the SVG → 3D pipeline works
 
@@ -99,7 +117,8 @@ export, so exported frames match the preview exactly and a keyframe timeline can
 
 ## Implemented features
 
-- **Viewport**: orbit/pan/zoom (damped), a **render frame** overlay showing the exact export crop
+- **Viewport**: orbit/pan/zoom (damped), **camera pose presets** (3/4 studio · front · side ·
+  top) in the toolbar, a **render frame** overlay showing the exact export crop
   (fixed render fov + aspect; the viewport widens around it, so exports match the frame at any
   window size), fit & reset camera, camera auto-rotate, grid toggle (viewport-only),
   transparent/checkerboard/solid/gradient/studio backgrounds, floor shadow with soft option
@@ -138,6 +157,10 @@ export, so exported frames match the preview exactly and a keyframe timeline can
   bar + cancel; UI stays responsive during export.
 - **Presets & project**: full-state JSON save/load with validation and clamping (icon, geometry,
   material, lighting, background, animation, camera, export settings); new/reset project.
+- **Session autosave**: every adjustment is continuously saved to localStorage (validated on
+  restore like a preset file), so a crash, reload or closed tab never loses work. The export
+  pipeline additionally reuses one long-lived offscreen GL context and pauses the viewport
+  while exporting, which removes the GPU-memory spikes that could crash the tab on export.
 - **Undo/redo**: history for all parameter changes; slider drags collapse to single entries.
   Shortcuts: `Ctrl+Z`, `Ctrl+Shift+Z` / `Ctrl+Y`, `Space` play/pause, `F` fit, `0` reset camera —
   all suppressed while typing in inputs.

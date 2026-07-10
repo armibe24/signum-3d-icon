@@ -28,6 +28,21 @@ import { BASE_FOV, viewportFov } from './frame'
 
 const DEFAULT_FOV = BASE_FOV
 
+/* Fixed camera poses selectable from the viewport toolbar. All poses look
+   at the origin from the default camera distance, so switching poses never
+   changes the framing scale — only the direction. */
+export type CameraPoseId = 'default' | 'front' | 'side' | 'top'
+
+const POSE_DISTANCE = Math.hypot(1.4, 1.1, 3.9) // ≈ 4.29, the default distance
+
+export const CAMERA_POSES: { id: CameraPoseId; label: string; title: string; position: [number, number, number] }[] = [
+  { id: 'default', label: '3/4', title: 'Three-quarter studio view (default)', position: [1.4, 1.1, 3.9] },
+  { id: 'front', label: 'Front', title: 'Straight-on front view', position: [0, 0, POSE_DISTANCE] },
+  { id: 'side', label: 'Side', title: 'Right side profile', position: [POSE_DISTANCE, 0, 0] },
+  // a touch of z keeps OrbitControls' polar angle off the exact pole
+  { id: 'top', label: 'Top', title: 'Top-down view', position: [0, POSE_DISTANCE * 0.997, POSE_DISTANCE * 0.075] },
+]
+
 export class SceneManager {
   readonly scene = new THREE.Scene()
   readonly camera = new THREE.PerspectiveCamera(DEFAULT_FOV, 1, 0.05, 100)
@@ -56,6 +71,7 @@ export class SceneManager {
   onZoomChange: ((pct: number) => void) | null = null
 
   gridVisible = false
+  private renderPaused = false
   private userScale = 1
   private meshBaseRadius = 1
   /** export aspect ratio — drives the viewport fov & render frame */
@@ -124,6 +140,10 @@ export class SceneManager {
       this.raf = requestAnimationFrame(loop)
       const dt = Math.min((now - this.lastTick) / 1000, 0.25)
       this.lastTick = now
+      // paused while an export renders: the export renderer owns the GPU
+      // and mutates the shared scene per frame — drawing the viewport too
+      // doubles GPU load and can flash half-posed frames
+      if (this.renderPaused) return
       this.onFrame?.(dt)
       this.controls.update()
       this.renderer.render(this.scene, this.camera)
@@ -278,6 +298,16 @@ export class SceneManager {
     this.setCameraState({ position: [1.4, 1.1, 3.9], target: [0, 0, 0], autoRotate: this.controls?.autoRotate ?? false })
   }
 
+  /** Jump to one of the fixed poses (¾ / front / side / top). */
+  setCameraPose(id: CameraPoseId): void {
+    const pose = CAMERA_POSES.find((p) => p.id === id) ?? CAMERA_POSES[0]
+    this.setCameraState({
+      position: [...pose.position],
+      target: [0, 0, 0],
+      autoRotate: this.controls?.autoRotate ?? false,
+    })
+  }
+
   /** Frame the object: keep view direction, adjust distance to fit.
       Fits against the RENDER frame (BASE_FOV), not the wider viewport,
       so "fit" means "fills the export nicely". */
@@ -294,6 +324,12 @@ export class SceneManager {
   }
 
   /* ---------------- export support ---------------- */
+
+  /** pause the viewport render loop for the duration of an export */
+  setRenderPaused(paused: boolean): void {
+    this.renderPaused = paused
+    this.lastTick = performance.now() // don't integrate the paused span into dt
+  }
 
   /** exclude viewport-only helpers while an export renderer draws the scene */
   beginExternalRender(): () => void {

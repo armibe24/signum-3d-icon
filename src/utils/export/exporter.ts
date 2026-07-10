@@ -21,7 +21,8 @@ import { backgroundHasAlpha } from '../../engine/background'
 import { normalizePlayTime } from '../../engine/animation'
 import { store } from '../../store/store'
 import { downloadBlob, safeFileName } from '../file'
-import { ExportRenderer } from './renderer'
+import { acquireExportRenderer, releaseExportRenderer, type ExportRenderer } from './renderer'
+import { sceneManager } from '../../engine/SceneManager'
 import { encodeMp4Frame, createMp4Encoder } from './videoMp4'
 import { createWebmEncoder } from './videoWebm'
 import { createGifEncoder } from './gif'
@@ -79,8 +80,9 @@ function videoSafeBackground(b: BackgroundSettings): BackgroundSettings {
 export async function exportStill(settings: AppSettings): Promise<void> {
   const { width, height, stillFormat } = settings.export
   await waitForGeometry()
-  const ex = new ExportRenderer(width, height)
+  sceneManager.setRenderPaused(true)
   try {
+    const ex = acquireExportRenderer(width, height)
     // JPG has no alpha either — bake the studio backdrop
     const bg =
       stillFormat === 'jpg' ? videoSafeBackground(settings.background) : settings.background
@@ -90,7 +92,8 @@ export async function exportStill(settings: AppSettings): Promise<void> {
     downloadBlob(blob, `${safeFileName(settings.icon.name)}-${width}x${height}.${stillFormat}`)
     store.toast(`Exported ${stillFormat.toUpperCase()} (${width}×${height})`)
   } finally {
-    ex.dispose()
+    releaseExportRenderer()
+    sceneManager.setRenderPaused(false)
   }
 }
 
@@ -116,7 +119,17 @@ export async function exportAnimation(settings: AppSettings): Promise<void> {
   const setProgress = (p: number, label: string) =>
     store.setTransient({ exportJob: { label, progress: p, cancel: () => aborter.abort() } })
 
-  const ex = new ExportRenderer(width, height)
+  // the export renderer owns the GPU for the duration — pausing the
+  // viewport halves peak GPU load (the #1 cause of mid-export tab crashes)
+  sceneManager.setRenderPaused(true)
+  let ex: ExportRenderer
+  try {
+    ex = acquireExportRenderer(width, height)
+  } catch (e) {
+    sceneManager.setRenderPaused(false)
+    store.toast(e instanceof Error ? e.message : 'Could not create the export renderer.', 'error')
+    return
+  }
   const alpha = backgroundHasAlpha(settings.background)
   const bg =
     animFormat === 'mp4' || animFormat === 'webm'
@@ -174,7 +187,8 @@ export async function exportAnimation(settings: AppSettings): Promise<void> {
         /* already gone */
       }
     }
-    ex.dispose()
+    releaseExportRenderer()
+    sceneManager.setRenderPaused(false)
     store.setTransient({ exportJob: null })
   }
 }

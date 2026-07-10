@@ -6,7 +6,7 @@
    ============================================================ */
 
 import { useEffect, useRef, useState } from 'react'
-import { sceneManager } from '../engine/SceneManager'
+import { CAMERA_POSES, sceneManager } from '../engine/SceneManager'
 import { store, useStore } from '../store/store'
 import { importSvgFile } from './IconBrowser'
 import { RenderFrame } from './RenderFrame'
@@ -77,6 +77,22 @@ export function Viewport3D() {
           <span className="vp-readout" title="Camera zoom relative to the default view">
             {zoomPct}%
           </span>
+        </div>
+        <div className="vp-chipgroup" role="group" aria-label="Camera poses">
+          <span className="vp-chip vp-chip--label" title="Jump to a fixed camera pose">
+            <Icon name="video" size={11} strokeWidth={2.4} />
+          </span>
+          {CAMERA_POSES.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className="vp-chip"
+              title={p.title}
+              onClick={() => sceneManager.setCameraPose(p.id)}
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
         {processing && (
           <span className="vp-processing">
