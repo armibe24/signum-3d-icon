@@ -265,7 +265,29 @@ export function assembleIconGeometry(parts: MultiPolygon[], g: GeometrySettings)
   geo.scale(worldScale, worldScale, worldScale)
   geo.computeBoundingBox()
   geo.computeBoundingSphere()
+  generatePlanarUvs(geo)
   return { geometry: geo, warnings, partCount }
+}
+
+/**
+ * Front-planar UVs spanning 0..1 across the icon's XY bounding box, so a
+ * user texture maps predictably ("scale 1 = image covers the icon once").
+ * Side walls and bevels project the nearest silhouette pixels — the usual
+ * look for extruded logos. Replaces ExtrudeGeometry's raw shape-space UVs
+ * (which the per-group shading pass drops anyway).
+ */
+function generatePlanarUvs(geo: THREE.BufferGeometry): void {
+  const pos = geo.getAttribute('position')
+  const box = geo.boundingBox
+  if (!pos || !box) return
+  const sx = box.max.x - box.min.x || 1
+  const sy = box.max.y - box.min.y || 1
+  const uv = new Float32Array(pos.count * 2)
+  for (let i = 0; i < pos.count; i++) {
+    uv[i * 2] = (pos.getX(i) - box.min.x) / sx
+    uv[i * 2 + 1] = (pos.getY(i) - box.min.y) / sy
+  }
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
 }
 
 /** Sanity check used by the build orchestrator to warn instead of

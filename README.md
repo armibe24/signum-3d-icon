@@ -33,6 +33,12 @@ npm run dev                # …and in a second terminal:
 npm run electron:dev       # Electron pointed at the Vite dev server (HMR)
 ```
 
+**Branding**: the app logo and icons live in `branding/` (`logo.svg`, `icon.png`, `icon.ico`) —
+swap those files to rebrand. The top bar and favicon use `logo.svg`/`icon.ico`; the Electron
+window icon uses `icon.png`; and electron-builder reads the same folder (`buildResources`) for
+the installer icons (`.ico` on Windows; macOS `.icns` is auto-generated from the 512px
+`icon.png`).
+
 The shell serves the unmodified `dist/` bundle through a privileged custom scheme (`app://`)
 instead of `file://` — required because the app uses module Web Workers (geometry + GIF encoding)
 and `fetch()`es its bundled 3D-text fonts, both of which Chromium denies to `file://` pages. The
@@ -142,12 +148,20 @@ export, so exported frames match the preview exactly and a keyframe timeline can
 - **Material**: 8 presets (black/silver/gold metal, white clay, soft plastic, neon glow, dark
   glossy, warm matte) + 8 modes (solid, clay, plastic, metal, chrome, soft metallic, glassy,
   emissive); base/emissive color, roughness, metalness, opacity, clearcoat, emissive intensity,
-  environment intensity; image-based lighting from a procedural room environment. **Per-part
+  environment intensity; image-based lighting from a procedural room environment. **Image
+  textures**: load any image as the object's color texture (planar-mapped 0..1 across the icon,
+  tiling slider, multiplies with the base color); stored inside presets/autosave as data URLs.
+  **Per-part
   colors**: when an icon consists of multiple disconnected parts (e.g. the three ellipsis dots,
   or every glyph of a 3D text), each part gets its own color field — parts are indexed largest
   first, unset parts follow the base color, and color changes never trigger a geometry rebuild.
 - **Lighting**: studio / softbox / dramatic side / top presets; ambient, key, fill, rim
-  intensities; key light azimuth/elevation; shadows + soft shadows.
+  intensities; key light azimuth/elevation; shadows + soft shadows; **custom HDRI** — load an
+  equirectangular `.hdr` (Radiance) or any LDR image as the image-based-lighting environment,
+  used identically by the viewport and every export.
+- **Backgrounds**: transparent, checkerboard preview, solid, gradient, studio backdrop, or a
+  **loaded image** — cover-cropped behind the object at the viewport aspect and again at the
+  exact export aspect, so exports never stretch the backdrop.
 - **Animation**: static, spin X/Y, turntable, slow turn, wobble, floating wobble, reveal
   (start→end rotation), bounce-in; duration, FPS, loop, speed/turns, direction, easing,
   start/end rotation; play/pause (preview never autoplays); Sonitus-style timeline with

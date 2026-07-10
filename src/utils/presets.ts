@@ -31,6 +31,15 @@ function bool(v: unknown, fallback: boolean): boolean {
   return typeof v === 'boolean' ? v : fallback
 }
 
+/** user-loaded images travel inside presets as data URLs */
+function dataUrl(v: unknown): string {
+  return typeof v === 'string' && v.startsWith('data:') && v.length <= 33_000_000 ? v : ''
+}
+
+function shortStr(v: unknown, max = 120): string {
+  return typeof v === 'string' ? v.slice(0, max) : ''
+}
+
 function vec3(v: unknown, fallback: { x: number; y: number; z: number }) {
   const o = (v ?? {}) as Record<string, unknown>
   return {
@@ -127,6 +136,9 @@ export function parsePreset(json: string): AppSettings {
       emissiveIntensity: num(m.emissiveIntensity, d.material.emissiveIntensity, 0, 8),
       clearcoat: num(m.clearcoat, d.material.clearcoat, 0, 1),
       envIntensity: num(m.envIntensity, d.material.envIntensity, 0, 3),
+      textureMap: dataUrl(m.textureMap),
+      textureName: shortStr(m.textureName),
+      textureScale: num(m.textureScale, d.material.textureScale, 0.05, 20),
     },
     lighting: {
       preset: str(l.preset, ['studio', 'softbox', 'dramatic', 'top', 'custom'] as const, d.lighting.preset),
@@ -138,15 +150,20 @@ export function parsePreset(json: string): AppSettings {
       keyElevation: num(l.keyElevation, d.lighting.keyElevation, 5, 85),
       shadows: bool(l.shadows, d.lighting.shadows),
       softShadows: bool(l.softShadows, d.lighting.softShadows),
+      envMap: dataUrl(l.envMap),
+      envMapName: shortStr(l.envMapName),
+      envMapType: str(l.envMapType, ['hdr', 'ldr'] as const, 'ldr'),
     },
     background: {
       mode: str(
         b.mode,
-        ['transparent', 'checkerboard', 'solid', 'gradient', 'studio'] as const,
+        ['transparent', 'checkerboard', 'solid', 'gradient', 'studio', 'image'] as const,
         d.background.mode,
       ),
       color: color(b.color, d.background.color),
       color2: color(b.color2, d.background.color2),
+      image: dataUrl(b.image),
+      imageName: shortStr(b.imageName),
     },
     animation: {
       preset: str(

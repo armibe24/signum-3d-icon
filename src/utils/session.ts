@@ -50,11 +50,23 @@ export function restoreSession(): boolean {
     orbiting, which lives outside `settings`). */
 export function startSessionAutosave(): void {
   const write = () => {
+    const settings = { ...store.get().settings, camera: sceneManager.getCameraState() }
     try {
-      const settings = { ...store.get().settings, camera: sceneManager.getCameraState() }
       localStorage.setItem(SESSION_KEY, serializePreset(settings))
     } catch {
-      /* quota/private mode — autosave just doesn't persist */
+      // localStorage quota (~5 MB) — usually a large loaded image/HDRI.
+      // Persist everything EXCEPT the big assets rather than nothing.
+      try {
+        const slim = {
+          ...settings,
+          background: { ...settings.background, image: '', imageName: '' },
+          lighting: { ...settings.lighting, envMap: '', envMapName: '' },
+          material: { ...settings.material, textureMap: '', textureName: '' },
+        }
+        localStorage.setItem(SESSION_KEY, serializePreset(slim))
+      } catch {
+        /* private mode / still over quota — autosave just doesn't persist */
+      }
     }
   }
 

@@ -58,6 +58,9 @@ function createWindow() {
     minWidth: 1080,
     minHeight: 680,
     backgroundColor: '#071219', // matches the app shell — no white flash
+    // window icon (Linux/Windows taskbar); installer icons come from
+    // branding/ via electron-builder's buildResources
+    icon: path.join(__dirname, '..', 'branding', 'icon.png'),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),

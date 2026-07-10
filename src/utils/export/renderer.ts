@@ -20,7 +20,8 @@
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { sceneManager } from '../../engine/SceneManager'
-import { resolveBackground } from '../../engine/background'
+import { applyBackgroundCover, backgroundIsImage, resolveBackground } from '../../engine/background'
+import { getCustomEnvironment } from '../../engine/environment'
 import { BASE_FOV } from '../../engine/frame'
 import type { AnimationSettings, BackgroundSettings } from '../../types'
 
@@ -88,10 +89,17 @@ export class ExportRenderer {
 
     const prevEnv = scene.environment
     const prevBg = scene.background
-    scene.environment = this.env
+    // custom equirect HDRIs are PMREM'd per-context by the renderer, so the
+    // shared texture works here directly; only the procedural room fallback
+    // needs this context's own PMREM copy
+    scene.environment = getCustomEnvironment() ?? this.env
 
     const resolved = resolveBackground(background)
     scene.background = resolved.texture ?? resolved.clearColor
+    if (resolved.texture && backgroundIsImage(background)) {
+      // crop to the EXPORT aspect (the viewport re-crops itself each frame)
+      applyBackgroundCover(resolved.texture, this.width / this.height)
+    }
 
     sceneManager.applyPose(anim, time)
 

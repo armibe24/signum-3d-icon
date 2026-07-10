@@ -70,6 +70,12 @@ export interface MaterialSettings {
   emissiveIntensity: number
   clearcoat: number
   envIntensity: number
+  /** image used as the color texture of the object (data URL); multiplies
+      with the base color, so white areas show the color unchanged */
+  textureMap: string
+  textureName: string
+  /** tiling: 1 = the image spans the icon once, 2 = tiled twice, … */
+  textureScale: number
 }
 
 export type LightingPresetId = 'studio' | 'softbox' | 'dramatic' | 'top' | 'custom'
@@ -85,15 +91,24 @@ export interface LightingSettings {
   keyElevation: number
   shadows: boolean
   softShadows: boolean
+  /** custom image-based lighting: equirectangular .hdr or LDR image as a
+      data URL; empty = the built-in procedural studio environment */
+  envMap: string
+  envMapName: string
+  /** 'hdr' = Radiance RGBE file, 'ldr' = plain image (png/jpg/webp) */
+  envMapType: 'hdr' | 'ldr'
 }
 
-export type BackgroundMode = 'transparent' | 'checkerboard' | 'solid' | 'gradient' | 'studio'
+export type BackgroundMode = 'transparent' | 'checkerboard' | 'solid' | 'gradient' | 'studio' | 'image'
 
 export interface BackgroundSettings {
   mode: BackgroundMode
   color: string
   /** second stop for gradient mode */
   color2: string
+  /** user-loaded backdrop for 'image' mode (data URL, cover-cropped) */
+  image: string
+  imageName: string
 }
 
 export type AnimationPresetId =
@@ -201,6 +216,9 @@ export function defaultSettings(): AppSettings {
       emissiveIntensity: 0,
       clearcoat: 0.6,
       envIntensity: 1,
+      textureMap: '',
+      textureName: '',
+      textureScale: 1,
     },
     lighting: {
       preset: 'studio',
@@ -213,8 +231,11 @@ export function defaultSettings(): AppSettings {
       // performance-friendly defaults: shadows are opt-in
       shadows: false,
       softShadows: true,
+      envMap: '',
+      envMapName: '',
+      envMapType: 'ldr',
     },
-    background: { mode: 'checkerboard', color: '#0c2029', color2: '#123240' },
+    background: { mode: 'checkerboard', color: '#0c2029', color2: '#123240', image: '', imageName: '' },
     animation: {
       preset: 'turntable',
       duration: 3,

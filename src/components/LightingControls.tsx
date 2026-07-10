@@ -1,8 +1,10 @@
 import { Slider } from './common/Slider'
 import { Select } from './common/Select'
 import { Toggle } from './common/Toggle'
-import { setSlice, useStore } from '../store/store'
+import { ImageField } from './common/ImageField'
+import { setSlice, store, useStore } from '../store/store'
 import { LIGHTING_PRESETS } from '../engine/lights'
+import { binaryFileToDataUrl, imageFileToDataUrl } from '../utils/file'
 import type { LightingSettings } from '../types'
 
 function edit(patch: Partial<LightingSettings>) {
@@ -35,6 +37,24 @@ export function LightingControls() {
       <Toggle label="Floor shadow" checked={l.shadows} onChange={(v) => setSlice('lighting', { shadows: v })} />
       <Toggle label="Soft shadow" checked={l.softShadows} disabled={!l.shadows}
         onChange={(v) => setSlice('lighting', { softShadows: v })} />
+
+      <ImageField label="Environment (HDRI / image)" value={l.envMap} name={l.envMapName}
+        accept=".hdr,image/png,image/jpeg,image/webp" buttonText="Load HDRI / image…"
+        noPreview={l.envMapType === 'hdr'}
+        onPick={async (file) => {
+          try {
+            const isHdr = /\.hdr$/i.test(file.name)
+            const envMap = isHdr ? await binaryFileToDataUrl(file) : await imageFileToDataUrl(file)
+            setSlice('lighting', { envMap, envMapName: file.name, envMapType: isHdr ? 'hdr' : 'ldr' })
+          } catch (e) {
+            store.toast(e instanceof Error ? e.message : 'Could not load the environment map.', 'error')
+          }
+        }}
+        onClear={() => setSlice('lighting', { envMap: '', envMapName: '', envMapType: 'ldr' })} />
+      <p className="export-note">
+        Equirectangular (360°) images work best. The environment drives reflections and image-based
+        lighting; its strength is the material’s <b>Environment</b> slider.
+      </p>
     </div>
   )
 }

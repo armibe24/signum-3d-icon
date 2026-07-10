@@ -1,6 +1,8 @@
 import { Select } from './common/Select'
 import { ColorField } from './common/ColorField'
-import { setSlice, useStore } from '../store/store'
+import { ImageField } from './common/ImageField'
+import { setSlice, store, useStore } from '../store/store'
+import { imageFileToDataUrl } from '../utils/file'
 
 export function BackgroundControls() {
   const b = useStore((s) => s.settings.background)
@@ -14,6 +16,7 @@ export function BackgroundControls() {
           { value: 'solid', label: 'Solid color' },
           { value: 'gradient', label: 'Gradient' },
           { value: 'studio', label: 'Studio backdrop' },
+          { value: 'image', label: 'Image' },
         ]}
         onChange={(v) => setSlice('background', { mode: v })} />
 
@@ -24,6 +27,25 @@ export function BackgroundControls() {
       {b.mode === 'gradient' && (
         <ColorField label="Bottom color" value={b.color2}
           onChange={(c) => setSlice('background', { color2: c })} />
+      )}
+
+      {b.mode === 'image' && (
+        <>
+          <ImageField label="Backdrop image" value={b.image} name={b.imageName}
+            accept="image/png,image/jpeg,image/webp" buttonText="Load image…"
+            onPick={async (file) => {
+              try {
+                const image = await imageFileToDataUrl(file)
+                setSlice('background', { image, imageName: file.name })
+              } catch (e) {
+                store.toast(e instanceof Error ? e.message : 'Could not load the image.', 'error')
+              }
+            }}
+            onClear={() => setSlice('background', { image: '', imageName: '' })} />
+          <p className="export-note">
+            The image is cover-cropped behind the object in the preview and in every export.
+          </p>
+        </>
       )}
 
       <p className="export-note">

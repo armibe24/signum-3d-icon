@@ -11,7 +11,8 @@ import type { LightingSettings, LightingPresetId } from '../types'
 export interface LightingPresetDef {
   id: LightingPresetId
   label: string
-  values: Omit<LightingSettings, 'preset' | 'shadows' | 'softShadows'>
+  /** presets set the light rig only — the custom HDRI selection persists */
+  values: Omit<LightingSettings, 'preset' | 'shadows' | 'softShadows' | 'envMap' | 'envMapName' | 'envMapType'>
 }
 
 export const LIGHTING_PRESETS: LightingPresetDef[] = [

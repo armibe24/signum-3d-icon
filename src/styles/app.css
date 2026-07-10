@@ -115,6 +115,13 @@
 .vp-chip--label{display:inline-flex;align-items:center;color:var(--ink-dim);
   padding:.42rem .3rem .42rem .55rem;cursor:default}
 .vp-chip--label:hover{background:none;color:var(--ink-dim)}
+
+.imgfield{display:flex;align-items:center;gap:8px;padding:6px;border-radius:10px;
+  border:1px solid var(--line);background:rgba(255,255,255,.03)}
+.imgfield-thumb{width:34px;height:34px;object-fit:cover;border-radius:7px;flex-shrink:0;
+  border:1px solid var(--line-strong);background:#0a141a}
+.imgfield-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-family:var(--font-mono);font-size:.62rem;color:var(--ink-soft)}
 .vp-readout{font-family:var(--font-mono);font-size:.6rem;font-weight:600;letter-spacing:.08em;
   color:var(--ink-dim);padding:.42rem .5rem;min-width:52px;text-align:center}
 

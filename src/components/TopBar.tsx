@@ -9,6 +9,7 @@ import { savePresetFile, loadPresetFile, resetProject } from './PresetControls'
 import { AboutModal } from './AboutModal'
 import { SettingsModal } from './SettingsModal'
 import { Icon } from './common/Icon'
+import logoUrl from '../../branding/logo.svg'
 
 interface Action {
   icon: string
@@ -42,7 +43,7 @@ export function TopBar() {
     <header className="topbar">
       <div className="topbar-brand">
         <span className="topbar-logo">
-          <Icon name="box" size={20} strokeWidth={2} />
+          <img src={logoUrl} alt="" width={22} height={22} style={{ display: 'block', borderRadius: 5 }} />
         </span>
         SIGNUM
       </div>

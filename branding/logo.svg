@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Signum 3D Icon Studio — app logo.
+       Swap this file (and icon.png / icon.ico next to it) to rebrand:
+       the top bar, the favicon and the Electron app/installer icons all
+       come from this folder. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#17435a"/>
+      <stop offset="0.55" stop-color="#0d2836"/>
+      <stop offset="1" stop-color="#081a24"/>
+    </linearGradient>
+    <linearGradient id="faceTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c8f4ff"/>
+      <stop offset="1" stop-color="#7fdcf4"/>
+    </linearGradient>
+    <linearGradient id="faceLeft" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4cc3e0"/>
+      <stop offset="1" stop-color="#2f97b5"/>
+    </linearGradient>
+    <linearGradient id="faceRight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2f97b5"/>
+      <stop offset="1" stop-color="#1c6c86"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bg)"/>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="none"
+        stroke="#46e0ff" stroke-opacity="0.28" stroke-width="6"/>
+
+  <!-- soft glow under the cube -->
+  <ellipse cx="256" cy="392" rx="150" ry="34" fill="#46e0ff" opacity="0.13"/>
+
+  <!-- extruded isometric cube -->
+  <g stroke="#082330" stroke-width="7" stroke-linejoin="round">
+    <polygon points="256,122 372,189 256,256 140,189" fill="url(#faceTop)"/>
+    <polygon points="140,189 256,256 256,390 140,323" fill="url(#faceLeft)"/>
+    <polygon points="372,189 372,323 256,390 256,256" fill="url(#faceRight)"/>
+  </g>
+  <!-- top-edge highlight -->
+  <polyline points="140,189 256,122 372,189" fill="none"
+            stroke="#eafcff" stroke-opacity="0.65" stroke-width="4"
+            stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- glass sweep across the upper half -->
+  <path d="M 128 16 h 256 a 112 112 0 0 1 112 112 v 90 q -240 62 -480 0 v -90 a 112 112 0 0 1 112 -112 z"
+        fill="url(#gloss)"/>
+</svg>

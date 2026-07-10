@@ -1,8 +1,10 @@
 import { Slider } from './common/Slider'
 import { Select } from './common/Select'
 import { ColorField } from './common/ColorField'
-import { setSlice, useStore } from '../store/store'
+import { ImageField } from './common/ImageField'
+import { setSlice, store, useStore } from '../store/store'
 import { MATERIAL_MODES, MATERIAL_PRESETS } from '../engine/materials'
+import { imageFileToDataUrl } from '../utils/file'
 import { defaultSettings, type MaterialSettings } from '../types'
 
 /** any manual edit turns the preset chip to "custom" */
@@ -83,6 +85,27 @@ export function MaterialControls() {
             )}
           </div>
         </div>
+      )}
+
+      <ImageField label="Texture" value={m.textureMap} name={m.textureName}
+        accept="image/png,image/jpeg,image/webp" buttonText="Load texture…"
+        onPick={async (file) => {
+          try {
+            const textureMap = await imageFileToDataUrl(file)
+            edit({ textureMap, textureName: file.name })
+          } catch (e) {
+            store.toast(e instanceof Error ? e.message : 'Could not load the texture.', 'error')
+          }
+        }}
+        onClear={() => edit({ textureMap: '', textureName: '' })} />
+      {m.textureMap && (
+        <>
+          <Slider label="Texture tiling" value={m.textureScale} min={0.25} max={8} step={0.25}
+            decimals={2} onChange={(v) => edit({ textureScale: v })} />
+          <p className="export-note">
+            The texture multiplies with the base color — keep the color white to show it unchanged.
+          </p>
+        </>
       )}
 
       <Slider label="Roughness" value={m.roughness} min={0} max={1} onChange={(v) => edit({ roughness: v })} />

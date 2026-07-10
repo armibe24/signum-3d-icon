@@ -23,7 +23,8 @@ import type {
 import { evaluatePose } from './animation'
 import { applyMaterialSettings, createIconMaterial } from './materials'
 import { applyLightingSettings, createLightRig, type LightRig } from './lights'
-import { resolveBackground } from './background'
+import { applyBackgroundCover, backgroundIsImage, resolveBackground } from './background'
+import { getCustomEnvironment, setCustomEnvironment, setEnvironmentChangedListener } from './environment'
 import { BASE_FOV, viewportFov } from './frame'
 
 const DEFAULT_FOV = BASE_FOV
@@ -69,6 +70,10 @@ export class SceneManager {
   onFrame: ((dt: number) => void) | null = null
   /** fires with the camera zoom (percent of default distance) on orbit */
   onZoomChange: ((pct: number) => void) | null = null
+  /** fires when a custom environment map fails to load */
+  onEnvError: ((msg: string) => void) | null = null
+
+  private lastBackground: BackgroundSettings | null = null
 
   gridVisible = false
   private renderPaused = false
@@ -119,7 +124,9 @@ export class SceneManager {
     const pmrem = new THREE.PMREMGenerator(this.renderer)
     this.envTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
     pmrem.dispose()
-    this.scene.environment = this.envTexture
+    this.applyEnvironment()
+    // custom HDRIs decode asynchronously — swap them in once ready
+    setEnvironmentChangedListener(() => this.applyEnvironment())
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement)
     if (this.camera.position.lengthSq() < 1e-6) this.resetCamera()
@@ -146,6 +153,7 @@ export class SceneManager {
       if (this.renderPaused) return
       this.onFrame?.(dt)
       this.controls.update()
+      this.updateBackgroundCover()
       this.renderer.render(this.scene, this.camera)
     }
     this.raf = requestAnimationFrame(loop)
@@ -235,11 +243,34 @@ export class SceneManager {
   applyLighting(l: LightingSettings): void {
     applyLightingSettings(this.rig, l)
     this.ground.visible = l.shadows
+    setCustomEnvironment(l.envMap, l.envMapType, (msg) => this.onEnvError?.(msg))
+    this.applyEnvironment()
+  }
+
+  /** built-in room environment unless a custom HDRI/image is loaded */
+  private applyEnvironment(): void {
+    this.scene.environment = getCustomEnvironment() ?? this.envTexture
   }
 
   applyBackground(b: BackgroundSettings): void {
-    const resolved = resolveBackground(b)
+    this.lastBackground = b
+    // image backdrops decode async — re-apply once the pixels are there
+    const resolved = resolveBackground(b, () => {
+      if (this.lastBackground === b) this.applyBackground(b)
+    })
     this.scene.background = resolved.texture ?? resolved.clearColor
+    this.updateBackgroundCover()
+  }
+
+  /** keep an image backdrop cover-cropped to the current canvas aspect;
+      cheap, runs every frame (the export renderer shares the texture and
+      re-crops it for the export aspect while the viewport is paused) */
+  private updateBackgroundCover(): void {
+    if (!this.lastBackground || !backgroundIsImage(this.lastBackground)) return
+    const bg = this.scene.background
+    if (bg && (bg as THREE.Texture).isTexture) {
+      applyBackgroundCover(bg as THREE.Texture, this.camera.aspect)
+    }
   }
 
   setGrid(visible: boolean): void {

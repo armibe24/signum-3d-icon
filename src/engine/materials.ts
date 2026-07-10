@@ -29,8 +29,9 @@ export const MATERIAL_MODES: MaterialModeDef[] = [
 export interface MaterialPresetDef {
   id: string
   label: string
-  /** presets set the shared surface values; per-part color overrides persist */
-  values: Omit<MaterialSettings, 'preset' | 'partColors'>
+  /** presets set the shared surface values; per-part color overrides and
+      the loaded texture persist */
+  values: Omit<MaterialSettings, 'preset' | 'partColors' | 'textureMap' | 'textureName' | 'textureScale'>
 }
 
 const base = { opacity: 1, emissiveColor: '#46e0ff', emissiveIntensity: 0, clearcoat: 0, envIntensity: 1 }
@@ -50,6 +51,33 @@ export function createIconMaterial(): THREE.MeshPhysicalMaterial {
   return new THREE.MeshPhysicalMaterial()
 }
 
+/* ------------------------------------------------------------
+   user-loaded color textures — cached by data URL. The mesh has
+   planar 0..1 UVs across its bounding box (see geometry/mesh.ts),
+   so repeat = textureScale tiles the image across the icon.
+   ------------------------------------------------------------ */
+
+const textureCache = new Map<string, THREE.Texture>()
+const TEXTURE_CACHE_LIMIT = 4
+
+function iconTexture(dataUrl: string): THREE.Texture {
+  let tex = textureCache.get(dataUrl)
+  if (!tex) {
+    tex = new THREE.TextureLoader().load(dataUrl)
+    tex.colorSpace = THREE.SRGBColorSpace
+    tex.wrapS = THREE.RepeatWrapping
+    tex.wrapT = THREE.RepeatWrapping
+    tex.anisotropy = 4
+    textureCache.set(dataUrl, tex)
+    if (textureCache.size > TEXTURE_CACHE_LIMIT) {
+      const oldest = textureCache.keys().next().value as string
+      textureCache.get(oldest)?.dispose()
+      textureCache.delete(oldest)
+    }
+  }
+  return tex
+}
+
 /**
  * Apply the shared material settings, then the per-part color override for
  * `partIndex` (empty/missing entries keep the base color). Every part shares
@@ -57,6 +85,17 @@ export function createIconMaterial(): THREE.MeshPhysicalMaterial {
  */
 export function applyMaterialSettings(mat: THREE.MeshPhysicalMaterial, m: MaterialSettings, partIndex = 0): void {
   mat.color.set(m.partColors?.[partIndex] || m.color)
+
+  // color texture (multiplies with the color above — white shows it as-is)
+  const prevMap = mat.map
+  if (m.textureMap) {
+    mat.map = iconTexture(m.textureMap)
+    const s = Math.min(Math.max(m.textureScale || 1, 0.05), 20)
+    mat.map.repeat.set(s, s)
+  } else {
+    mat.map = null
+  }
+  if ((prevMap === null) !== (mat.map === null)) mat.needsUpdate = true
   mat.roughness = m.roughness
   mat.metalness = m.metalness
   mat.clearcoat = m.clearcoat

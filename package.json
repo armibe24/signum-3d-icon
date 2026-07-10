@@ -41,10 +41,12 @@
     "productName": "Signum 3D Icon Studio",
     "files": [
       "dist/**",
-      "electron/**"
+      "electron/**",
+      "branding/**"
     ],
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "branding"
     },
     "win": {
       "target": "nsis"

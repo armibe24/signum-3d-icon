@@ -41,6 +41,7 @@ function wireEngine() {
   sceneManager.onZoomChange = (pct) => {
     if (store.get().zoomPct !== pct) store.setTransient({ zoomPct: pct })
   }
+  sceneManager.onEnvError = (msg) => store.toast(msg, 'error')
 
   // apply non-geometry settings imperatively whenever their slice changes
   let prev = store.get().settings
