@@ -1,11 +1,19 @@
 /* ============================================================
-   Icon section — searchable lucide browser (grid previews built
-   from the bundled icon data) plus custom SVG import via file
-   picker; drag & drop lands on the viewport (see Viewport3D).
+   Icon section — searchable multi-library browser (lucide,
+   Tabler, Phosphor, Remix Icon — all bundled locally with their
+   licenses) plus custom SVG import via file picker; drag & drop
+   lands on the viewport (see Viewport3D).
    ============================================================ */
 
 import { useEffect, useMemo, useState } from 'react'
-import { searchIcons, lucideSvg } from '../icons/lucide'
+import {
+  ICON_LIBRARIES,
+  TOTAL_ICON_COUNT,
+  ensureLibraries,
+  iconSvg,
+  searchRegistry,
+  type LibraryFilter,
+} from '../icons/registry'
 import { setSlice, store, useStore } from '../store/store'
 import { pickFile, readFileText } from '../utils/file'
 import { Icon } from './common/Icon'
@@ -32,7 +40,7 @@ export async function importSvgFile(file: File): Promise<void> {
 }
 
 function IconCell({ id, selected }: { id: string; selected: boolean }) {
-  const svg = useMemo(() => lucideSvg(id), [id])
+  const svg = useMemo(() => iconSvg(id), [id])
   if (!svg) return null
   return (
     <button
@@ -48,6 +56,9 @@ function IconCell({ id, selected }: { id: string; selected: boolean }) {
 export function IconBrowser() {
   const [query, setQuery] = useState('')
   const [limit, setLimit] = useState(GRID_PAGE)
+  const [library, setLibrary] = useState<LibraryFilter>('all')
+  // bumped when a lazy-loaded icon pack arrives, so results recompute
+  const [loadedTick, setLoadedTick] = useState(0)
   const icon = useStore((s) => s.settings.icon)
   const warnings = useStore((s) => s.warnings)
   const [textDraft, setTextDraft] = useState(icon.type === 'text' ? (icon.text ?? '') : '')
@@ -67,9 +78,21 @@ export function IconBrowser() {
     })
   }
 
-  // search covers the whole bundled lucide set (~1,500 icons)
-  const results = useMemo(() => searchIcons(query), [query])
-  useEffect(() => setLimit(GRID_PAGE), [query])
+  // lazily pull in the vendored packs for the active filter
+  useEffect(() => {
+    let alive = true
+    ensureLibraries(library).then(() => {
+      if (alive) setLoadedTick((t) => t + 1)
+    })
+    return () => {
+      alive = false
+    }
+  }, [library])
+
+  // search covers every loaded library (names + official tags)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const results = useMemo(() => searchRegistry(query, library), [query, library, loadedTick])
+  useEffect(() => setLimit(GRID_PAGE), [query, library])
   const shown = results.slice(0, limit)
 
   return (
@@ -77,12 +100,19 @@ export function IconBrowser() {
       <div className="icon-search">
         <Icon name="search" size={12} strokeWidth={2.4} />
         <input
-          placeholder={`Search ${searchIcons('').length} lucide icons…`}
+          placeholder={`Search ${TOTAL_ICON_COUNT.toLocaleString()} icons…`}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.stopPropagation()}
         />
       </div>
+
+      <Select label="Library" value={library}
+        options={[
+          { value: 'all' as const, label: `All libraries (${TOTAL_ICON_COUNT.toLocaleString()})` },
+          ...ICON_LIBRARIES.map((l) => ({ value: l.id as LibraryFilter, label: `${l.label} (${l.count.toLocaleString()})` })),
+        ]}
+        onChange={setLibrary} />
 
       {results.length === 0 ? (
         <div className="icon-empty">
@@ -113,8 +143,8 @@ export function IconBrowser() {
       <div className="icon-meta">
         <span>
           {query.trim()
-            ? `${results.length} match${results.length === 1 ? '' : 'es'}`
-            : `all ${results.length} searchable`}
+            ? `${results.length.toLocaleString()} match${results.length === 1 ? '' : 'es'}`
+            : `all ${results.length.toLocaleString()} searchable`}
         </span>
         <b>
           {icon.type === 'custom' ? `custom: ${icon.name}` : icon.type === 'text' ? `text: ${icon.name}` : icon.name}

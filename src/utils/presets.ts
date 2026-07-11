@@ -7,7 +7,7 @@
 
 import type { AppSettings } from '../types'
 import { defaultSettings } from '../types'
-import { hasIcon } from '../icons/lucide'
+import { knownIcon } from '../icons/registry'
 import { MATERIAL_PRESETS } from '../engine/materials'
 
 export function serializePreset(settings: AppSettings): string {
@@ -92,7 +92,7 @@ export function parsePreset(json: string): AppSettings {
         ? iconText && iconText.trim()
           ? { type: 'text' as const, name: iconName.slice(0, 24), text: iconText, fontId: iconFont }
           : d.icon
-        : hasIcon(iconName)
+        : knownIcon(iconName)
           ? { type: 'lucide' as const, name: iconName }
           : d.icon
 

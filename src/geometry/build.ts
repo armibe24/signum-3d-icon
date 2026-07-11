@@ -23,7 +23,7 @@ import { parseSvg } from '../svg/parse'
 import type { SvgWorkerRequest, SvgWorkerResponse } from '../svg/types'
 import { assembleIconGeometry, geometryLooksValid } from './mesh'
 import { geometryCache, polygonCache } from './cache'
-import { lucideSvg } from '../icons/lucide'
+import { resolveIconSvg } from '../icons/registry'
 import { textToSvg } from '../text/textToSvg'
 
 export interface BuildResult {
@@ -175,8 +175,8 @@ class GeometryBuilder {
     if (settings.icon.type === 'text') {
       return textToSvg(settings.icon.text ?? '', settings.icon.fontId ?? 'dm-sans')
     }
-    const svg = lucideSvg(settings.icon.name, '#000')
-    if (!svg) throw new Error(`Unknown lucide icon "${settings.icon.name}".`)
+    const svg = await resolveIconSvg(settings.icon.name, '#000')
+    if (!svg) throw new Error(`Unknown icon "${settings.icon.name}".`)
     return svg
   }
 

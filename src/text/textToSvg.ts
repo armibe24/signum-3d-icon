@@ -32,16 +32,31 @@ export const TEXT_FONTS: TextFontDef[] = [
 
 const fontCache = new Map<TextFontId, Promise<opentype.Font>>()
 
+/** decode a base64 data URL without fetch() — works under every protocol
+    (http, Electron's app://, even file://), where fetching a font asset
+    URL can be blocked */
+function dataUrlToArrayBuffer(url: string): ArrayBuffer {
+  const b64 = url.slice(url.indexOf(',') + 1)
+  const bin = atob(b64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return bytes.buffer
+}
+
 function loadFont(id: TextFontId): Promise<opentype.Font> {
   let cached = fontCache.get(id)
   if (!cached) {
     const def = TEXT_FONTS.find((f) => f.id === id) ?? TEXT_FONTS[0]
-    cached = fetch(def.url)
-      .then((r) => {
-        if (!r.ok) throw new Error(`Font "${def.label}" could not be loaded.`)
-        return r.arrayBuffer()
-      })
-      .then((buf) => opentype.parse(buf))
+    // production builds inline the TTFs as data URLs (assetsInlineLimit) —
+    // decode directly; the dev server still hands out plain asset URLs
+    cached = def.url.startsWith('data:')
+      ? Promise.resolve(opentype.parse(dataUrlToArrayBuffer(def.url)))
+      : fetch(def.url)
+          .then((r) => {
+            if (!r.ok) throw new Error(`Font "${def.label}" could not be loaded.`)
+            return r.arrayBuffer()
+          })
+          .then((buf) => opentype.parse(buf))
     fontCache.set(id, cached)
   }
   return cached
