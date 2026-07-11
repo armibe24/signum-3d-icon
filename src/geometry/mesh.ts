@@ -297,8 +297,15 @@ export function assembleIconGeometry(parts: MultiPolygon[], g: GeometrySettings)
 }
 
 /**
- * Front-planar UVs spanning 0..1 across the icon's XY bounding box, so a
- * user texture maps predictably ("scale 1 = image covers the icon once").
+ * Front-planar UV sets for user textures. Three placements are generated
+ * up front (as uv / uv1 / uv2), so switching the mapping mode is a pure
+ * material change (texture.channel) with NO geometry rebuild:
+ *
+ *   uv  — "stretch": 0..1 across the icon's bounding box (fills exactly)
+ *   uv1 — "keep aspect": both axes divided by the larger bbox side,
+ *         centered — texture squares stay square on the object
+ *   uv2 — "per part": each disconnected part spans 0..1 on its own
+ *
  * Side walls and bevels project the nearest silhouette pixels — the usual
  * look for extruded logos. Replaces ExtrudeGeometry's raw shape-space UVs
  * (which the per-group shading pass drops anyway).
@@ -309,12 +316,47 @@ function generatePlanarUvs(geo: THREE.BufferGeometry): void {
   if (!pos || !box) return
   const sx = box.max.x - box.min.x || 1
   const sy = box.max.y - box.min.y || 1
+
   const uv = new Float32Array(pos.count * 2)
   for (let i = 0; i < pos.count; i++) {
     uv[i * 2] = (pos.getX(i) - box.min.x) / sx
     uv[i * 2 + 1] = (pos.getY(i) - box.min.y) / sy
   }
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+
+  // aspect-true: same world scale on both axes, centered on the icon
+  const m = Math.max(sx, sy)
+  const cx = (box.min.x + box.max.x) / 2
+  const cy = (box.min.y + box.max.y) / 2
+  const uv1 = new Float32Array(pos.count * 2)
+  for (let i = 0; i < pos.count; i++) {
+    uv1[i * 2] = (pos.getX(i) - cx) / m + 0.5
+    uv1[i * 2 + 1] = (pos.getY(i) - cy) / m + 0.5
+  }
+  geo.setAttribute('uv1', new THREE.Float32BufferAttribute(uv1, 2))
+
+  // per part: each material group (= disconnected part) gets its own 0..1
+  const uv2 = new Float32Array(pos.count * 2)
+  const groups = geo.groups.length ? geo.groups : [{ start: 0, count: pos.count }]
+  for (const group of groups) {
+    const end = Math.min(group.start + group.count, pos.count)
+    let gMinX = Infinity, gMinY = Infinity, gMaxX = -Infinity, gMaxY = -Infinity
+    for (let i = group.start; i < end; i++) {
+      const x = pos.getX(i)
+      const y = pos.getY(i)
+      if (x < gMinX) gMinX = x
+      if (x > gMaxX) gMaxX = x
+      if (y < gMinY) gMinY = y
+      if (y > gMaxY) gMaxY = y
+    }
+    const gsx = gMaxX - gMinX || 1
+    const gsy = gMaxY - gMinY || 1
+    for (let i = group.start; i < end; i++) {
+      uv2[i * 2] = (pos.getX(i) - gMinX) / gsx
+      uv2[i * 2 + 1] = (pos.getY(i) - gMinY) / gsy
+    }
+  }
+  geo.setAttribute('uv2', new THREE.Float32BufferAttribute(uv2, 2))
 }
 
 /** Sanity check used by the build orchestrator to warn instead of

@@ -21,13 +21,16 @@ export interface TextFontDef {
   id: TextFontId
   label: string
   url: string
+  /** CSS family for previewing the font in the picker */
+  cssFamily: string
+  bold?: boolean
 }
 
 export const TEXT_FONTS: TextFontDef[] = [
-  { id: 'dm-sans', label: 'DM Sans', url: dmSansRegular },
-  { id: 'dm-sans-bold', label: 'DM Sans Bold', url: dmSansBold },
-  { id: 'jetbrains-mono', label: 'JetBrains Mono', url: jbMonoRegular },
-  { id: 'jetbrains-mono-bold', label: 'JetBrains Mono Bold', url: jbMonoBold },
+  { id: 'dm-sans', label: 'DM Sans', url: dmSansRegular, cssFamily: 'DM Sans' },
+  { id: 'dm-sans-bold', label: 'DM Sans Bold', url: dmSansBold, cssFamily: 'DM Sans', bold: true },
+  { id: 'jetbrains-mono', label: 'JetBrains Mono', url: jbMonoRegular, cssFamily: 'JetBrains Mono' },
+  { id: 'jetbrains-mono-bold', label: 'JetBrains Mono Bold', url: jbMonoBold, cssFamily: 'JetBrains Mono', bold: true },
 ]
 
 /* ------------------------------------------------------------

@@ -116,6 +116,17 @@
   padding:.42rem .3rem .42rem .55rem;cursor:default}
 .vp-chip--label:hover{background:none;color:var(--ink-dim)}
 
+.fontselect-menu{max-height:280px;overflow-y:auto}
+.fontselect-search{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:7px;
+  padding:8px 10px;border-bottom:1px solid var(--line);color:var(--ink-dim);
+  background:linear-gradient(180deg,rgba(15,36,45,.99),rgba(12,29,37,.99))}
+.fontselect-search input{flex:1;min-width:0;background:none;border:none;color:var(--ink);
+  font-family:var(--font-mono);font-size:.66rem;letter-spacing:.03em;outline:none}
+.fontselect-search input::placeholder{color:var(--ink-dim)}
+.fontselect-empty{padding:12px 10px;font-family:var(--font-mono);font-size:.62rem;color:var(--ink-dim)}
+.fontselect-sample{font-size:.86rem;line-height:1.25;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;text-transform:none;letter-spacing:0}
+
 .imgfield{display:flex;align-items:center;gap:8px;padding:6px;border-radius:10px;
   border:1px solid var(--line);background:rgba(255,255,255,.03)}
 .imgfield-thumb{width:34px;height:34px;object-fit:cover;border-radius:7px;flex-shrink:0;
@@ -153,14 +164,24 @@
   background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(12,28,35,.72));
   backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
 
-.side-rail{width:46px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;
-  gap:5px;padding:12px 0;border-right:1px solid var(--line)}
-.rail-btn{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;
-  justify-content:center;color:var(--ink-soft);background:none;border:1px solid transparent;
-  transition:background var(--transition-fast),color var(--transition-fast)}
-.rail-btn:hover{color:var(--sky-blue);background:rgba(255,255,255,.07)}
-.rail-btn.active{color:#03161c;background:linear-gradient(180deg,#7fdcf4,#46b3cc);
-  box-shadow:var(--gloss-inset),0 3px 10px rgba(70,179,204,.45)}
+/* icon rail — Sonitus style: glassy active state + glowing edge indicator */
+.side-rail{width:44px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;
+  gap:4px;padding:10px 0;border-right:1px solid var(--line-strong);
+  background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(9,22,28,.8));
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.rail-btn{position:relative;display:grid;place-items:center;width:34px;height:34px;
+  border-radius:var(--radius-small);border:1px solid transparent;color:var(--ink-dim);
+  background:none;
+  transition:background var(--transition-fast),color var(--transition-fast),
+    border-color var(--transition-fast),box-shadow var(--transition-fast)}
+.rail-btn:hover{background:rgba(255,255,255,.07);color:var(--sky-blue);
+  border-color:var(--line-strong)}
+.rail-btn.active{color:var(--sky-blue);border-color:var(--line-strong);
+  background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(70,179,204,.12));
+  box-shadow:var(--gloss-inset),0 0 10px rgba(70,179,204,.2)}
+.rail-btn.active::before{content:"";position:absolute;left:-6px;top:7px;bottom:7px;width:2px;
+  border-radius:2px;background:var(--sky-blue);box-shadow:0 0 8px rgba(95,198,232,.7)}
+.rail-btn svg{display:block}
 
 .side-panel{flex:1;min-width:0;overflow-y:auto;overflow-x:hidden;padding:6px 16px 32px}
 
@@ -420,7 +441,7 @@ input[type="number"]{-moz-appearance:textfield;appearance:textfield}
 .inline-field{display:flex;align-items:center;justify-content:space-between;gap:10px}
 
 .export-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.export-btns .btn{justify-content:center}
+.export-btns .btn{justify-content:center;padding:.9rem .6rem;font-size:.68rem;min-width:0}
 .export-note{font-family:var(--font-mono);font-size:.56rem;letter-spacing:.05em;line-height:1.7;
   color:var(--ink-dim);margin-top:2px}
 .export-note b{color:var(--ink-soft)}
@@ -562,6 +583,12 @@ input[type="number"]{-moz-appearance:textfield;appearance:textfield}
 .modal-note code{color:var(--sky-blue);font-size:.64rem}
 .modal-actions{display:flex;justify-content:flex-end;margin-top:10px;gap:8px}
 
+.about-head{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+.about-logo{flex-shrink:0;border-radius:10px}
+.about-name{font-family:var(--font-primary);font-size:1.05rem;font-weight:700;
+  text-transform:uppercase;letter-spacing:-.01em;color:var(--ink)}
+.about-version{font-family:var(--font-mono);font-size:.6rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-dim)}
 .about-table{width:100%;border-collapse:collapse;margin:4px 0 6px}
 .about-table th,.about-table td{font-family:var(--font-mono);font-size:.62rem;text-align:left;
   padding:6px 10px;border-bottom:1px solid var(--line)}

@@ -163,8 +163,10 @@ export, so exported frames match the preview exactly and a keyframe timeline can
   glossy, warm matte) + 8 modes (solid, clay, plastic, metal, chrome, soft metallic, glassy,
   emissive); base/emissive color, roughness, metalness, opacity, clearcoat, emissive intensity,
   environment intensity; image-based lighting from a procedural room environment. **Image
-  textures**: load any image as the object's color texture (planar-mapped 0..1 across the icon,
-  tiling slider, multiplies with the base color); stored inside presets/autosave as data URLs.
+  textures**: load any image as the object's color texture with selectable **UV placement**
+  (stretch to the icon, keep image aspect, or per-part 0–1 — all three UV sets are pre-generated
+  on the mesh, so switching is rebuild-free via `texture.channel`), a tiling slider, multiplied
+  with the base color; stored inside presets/autosave as data URLs.
   **Per-part
   colors**: when an icon consists of multiple disconnected parts (e.g. the three ellipsis dots,
   or every glyph of a 3D text), each part gets its own color field — parts are indexed largest
@@ -186,9 +188,12 @@ export, so exported frames match the preview exactly and a keyframe timeline can
   progress bar + cancel; UI stays responsive during export.
 - **Presets & project**: full-state JSON save/load with validation and clamping (icon, geometry,
   material, lighting, background, animation, camera, export settings); new/reset project.
-- **Sidebar tabs**: an icon rail (local lucide icons) next to the sidebar gives every section —
-  Icon, Geometry, Material, Lighting, Background, Animation, Export — its own tab; tabs stay
-  mounted, so searches and drafts survive switching.
+- **Sidebar tabs**: a Sonitus-style icon rail (local lucide icons, glassy active state with a
+  glowing edge indicator) next to the sidebar gives every section — Icon, Geometry, Material,
+  Lighting, Background, Animation, Export — its own tab; tabs stay mounted, so searches and
+  drafts survive switching. The font picker is a **searchable dropdown where every entry renders
+  in its own typeface**. The About dialog lists the app license plus every third-party library,
+  icon set and font with its license, Sonitus-style.
 - **Unsaved-changes warnings**: New project and Load preset ask first when the project has
   unsaved adjustments (with a "Save preset" shortcut); closing the app warns too — natively in
   the browser (`beforeunload`) and via a proper dialog in the Electron shell.

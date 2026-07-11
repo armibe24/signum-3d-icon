@@ -79,7 +79,12 @@ export interface MaterialSettings {
   textureName: string
   /** tiling: 1 = the image spans the icon once, 2 = tiled twice, … */
   textureScale: number
+  /** UV placement: stretch across the icon bbox, keep the image aspect
+      (squares stay square), or give every disconnected part its own 0..1 */
+  textureMapping: TextureMapping
 }
+
+export type TextureMapping = 'stretch' | 'aspect' | 'part'
 
 export type LightingPresetId = 'studio' | 'softbox' | 'dramatic' | 'top' | 'custom'
 
@@ -222,6 +227,7 @@ export function defaultSettings(): AppSettings {
       textureMap: '',
       textureName: '',
       textureScale: 1,
+      textureMapping: 'stretch',
     },
     lighting: {
       preset: 'studio',

@@ -31,7 +31,7 @@ export interface MaterialPresetDef {
   label: string
   /** presets set the shared surface values; per-part color overrides and
       the loaded texture persist */
-  values: Omit<MaterialSettings, 'preset' | 'partColors' | 'textureMap' | 'textureName' | 'textureScale'>
+  values: Omit<MaterialSettings, 'preset' | 'partColors' | 'textureMap' | 'textureName' | 'textureScale' | 'textureMapping'>
 }
 
 const base = { opacity: 1, emissiveColor: '#46e0ff', emissiveIntensity: 0, clearcoat: 0, envIntensity: 1 }
@@ -87,15 +87,25 @@ export function applyMaterialSettings(mat: THREE.MeshPhysicalMaterial, m: Materi
   mat.color.set(m.partColors?.[partIndex] || m.color)
 
   // color texture (multiplies with the color above — white shows it as-is)
-  const prevMap = mat.map
   if (m.textureMap) {
     mat.map = iconTexture(m.textureMap)
     const s = Math.min(Math.max(m.textureScale || 1, 0.05), 20)
     mat.map.repeat.set(s, s)
+    // uv placement — the mesh carries all three UV sets (geometry/mesh.ts):
+    // channel 0 = stretch (uv), 1 = keep aspect (uv1), 2 = per part (uv2)
+    mat.map.channel = m.textureMapping === 'aspect' ? 1 : m.textureMapping === 'part' ? 2 : 0
   } else {
     mat.map = null
   }
-  if ((prevMap === null) !== (mat.map === null)) mat.needsUpdate = true
+  // map presence and uv channel are baked into the compiled shader program.
+  // Track the state PER MATERIAL (per-part materials share one cached
+  // texture — comparing against the texture's own channel would mark only
+  // the first material dirty and leave the others on a stale program).
+  const mapState = mat.map ? mat.map.channel : -1
+  if (mat.userData.mapState !== mapState) {
+    mat.userData.mapState = mapState
+    mat.needsUpdate = true
+  }
   mat.roughness = m.roughness
   mat.metalness = m.metalness
   mat.clearcoat = m.clearcoat

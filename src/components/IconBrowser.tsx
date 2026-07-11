@@ -18,6 +18,7 @@ import { setSlice, store, useStore } from '../store/store'
 import { pickFile, readFileText } from '../utils/file'
 import { Icon } from './common/Icon'
 import { Select } from './common/Select'
+import { FontSelect } from './common/FontSelect'
 import {
   TEXT_FONTS,
   listSystemFonts,
@@ -174,17 +175,30 @@ export function IconBrowser() {
               e.stopPropagation()
             }}
           />
-          <Select
+          <FontSelect
             value={fontDraft}
             options={[
-              ...TEXT_FONTS.map((f) => ({ value: f.id as string, label: f.label })),
+              ...TEXT_FONTS.map((f) => ({
+                value: f.id as string,
+                label: f.label,
+                family: f.cssFamily,
+                bold: f.bold,
+              })),
               ...(systemFonts ?? []).map((f) => ({
                 value: f.id,
                 label: f.style === 'Regular' ? f.family : `${f.family} — ${f.style}`,
+                family: f.family,
+                bold: /bold/i.test(f.style),
               })),
               // keep a restored system font selectable before the list is loaded
               ...(fontDraft.startsWith('system:') && !systemFonts
-                ? [{ value: fontDraft, label: fontDraft.slice('system:'.length) }]
+                ? [
+                    {
+                      value: fontDraft,
+                      label: fontDraft.slice('system:'.length),
+                      family: fontDraft.slice('system:'.length),
+                    },
+                  ]
                 : []),
             ]}
             onChange={(v) => {

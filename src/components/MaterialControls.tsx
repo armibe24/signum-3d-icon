@@ -100,6 +100,13 @@ export function MaterialControls() {
         onClear={() => edit({ textureMap: '', textureName: '' })} />
       {m.textureMap && (
         <>
+          <Select label="Texture placement" value={m.textureMapping}
+            options={[
+              { value: 'stretch' as const, label: 'Stretch to icon' },
+              { value: 'aspect' as const, label: 'Keep image aspect' },
+              { value: 'part' as const, label: 'Per part (each part 0–1)' },
+            ]}
+            onChange={(v) => edit({ textureMapping: v })} />
           <Slider label="Texture tiling" value={m.textureScale} min={0.25} max={8} step={0.25}
             decimals={2} onChange={(v) => edit({ textureScale: v })} />
           <p className="export-note">

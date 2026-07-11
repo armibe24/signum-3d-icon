@@ -140,6 +140,7 @@ export function parsePreset(json: string): AppSettings {
       textureMap: dataUrl(m.textureMap),
       textureName: shortStr(m.textureName),
       textureScale: num(m.textureScale, d.material.textureScale, 0.05, 20),
+      textureMapping: str(m.textureMapping, ['stretch', 'aspect', 'part'] as const, d.material.textureMapping),
     },
     lighting: {
       preset: str(l.preset, ['studio', 'softbox', 'dramatic', 'top', 'custom'] as const, d.lighting.preset),
