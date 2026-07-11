@@ -5,6 +5,7 @@
 import { store } from '../store/store'
 import { parsePreset, serializePreset } from '../utils/presets'
 import { downloadBlob, pickFile, readFileText, safeFileName } from '../utils/file'
+import { markClean } from '../utils/dirty'
 import { sceneManager } from '../engine/SceneManager'
 import { defaultSettings } from '../types'
 
@@ -12,6 +13,7 @@ export async function savePresetFile(): Promise<void> {
   const settings = { ...store.get().settings, camera: sceneManager.getCameraState() }
   const json = serializePreset(settings)
   downloadBlob(new Blob([json], { type: 'application/json' }), `${safeFileName(settings.icon.name)}-preset.json`)
+  markClean()
   store.toast('Preset saved')
 }
 
@@ -22,6 +24,7 @@ export async function loadPresetFile(): Promise<void> {
     const settings = parsePreset(await readFileText(file))
     store.replaceSettings(settings)
     sceneManager.setCameraState(settings.camera)
+    markClean()
     store.toast(`Preset "${file.name}" loaded`)
   } catch (e) {
     store.toast(e instanceof Error ? e.message : 'Preset could not be loaded.', 'error')
@@ -33,6 +36,7 @@ export function resetProject(): void {
   store.replaceSettings(fresh)
   sceneManager.setCameraState(fresh.camera)
   store.setTransient({ time: 0, playing: false })
+  markClean()
   store.toast('New project')
 }
 

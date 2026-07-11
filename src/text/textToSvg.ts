@@ -30,6 +30,76 @@ export const TEXT_FONTS: TextFontDef[] = [
   { id: 'jetbrains-mono-bold', label: 'JetBrains Mono Bold', url: jbMonoBold },
 ]
 
+/* ------------------------------------------------------------
+   System fonts (Local Font Access API — Chromium / Electron).
+   Fonts installed on the machine are addressed as
+   `system:<postscript-name>`; their raw SFNT bytes come from
+   FontData.blob() and go through the same opentype.js path as
+   the bundled TTFs.
+   ------------------------------------------------------------ */
+
+export interface SystemFontEntry {
+  /** font id to store in settings ("system:" + postscriptName) */
+  id: string
+  family: string
+  style: string
+  postscriptName: string
+}
+
+interface FontData {
+  family: string
+  fullName: string
+  postscriptName: string
+  style: string
+  blob(): Promise<Blob>
+}
+
+declare global {
+  interface Window {
+    queryLocalFonts?: () => Promise<FontData[]>
+  }
+}
+
+export function systemFontsAvailable(): boolean {
+  return typeof window.queryLocalFonts === 'function'
+}
+
+let systemFontsCache: FontData[] | null = null
+
+async function querySystemFonts(): Promise<FontData[]> {
+  if (!systemFontsCache) {
+    if (!window.queryLocalFonts) {
+      throw new Error('System fonts are not available in this browser (Chromium/Electron only).')
+    }
+    systemFontsCache = await window.queryLocalFonts()
+  }
+  return systemFontsCache
+}
+
+/** All installed fonts, sorted by family then style ("Regular" first). */
+export async function listSystemFonts(): Promise<SystemFontEntry[]> {
+  const fonts = await querySystemFonts()
+  return fonts
+    .map((f) => ({
+      id: `system:${f.postscriptName}`,
+      family: f.family,
+      style: f.style || 'Regular',
+      postscriptName: f.postscriptName,
+    }))
+    .sort(
+      (a, b) =>
+        a.family.localeCompare(b.family) ||
+        (a.style === 'Regular' ? -1 : b.style === 'Regular' ? 1 : a.style.localeCompare(b.style)),
+    )
+}
+
+/** Human-readable label for any font id (bundled or system). */
+export function fontLabel(id: TextFontId): string {
+  const bundled = TEXT_FONTS.find((f) => f.id === id)
+  if (bundled) return bundled.label
+  return id.startsWith('system:') ? id.slice('system:'.length) : id
+}
+
 const fontCache = new Map<TextFontId, Promise<opentype.Font>>()
 
 /** decode a base64 data URL without fetch() — works under every protocol
@@ -43,20 +113,40 @@ function dataUrlToArrayBuffer(url: string): ArrayBuffer {
   return bytes.buffer
 }
 
+async function loadSystemFont(postscriptName: string): Promise<opentype.Font> {
+  const fonts = await querySystemFonts()
+  const font = fonts.find((f) => f.postscriptName === postscriptName)
+  if (!font) throw new Error(`Font "${postscriptName}" is not installed on this machine.`)
+  const buf = await (await font.blob()).arrayBuffer()
+  try {
+    return opentype.parse(buf)
+  } catch {
+    throw new Error(
+      `"${font.fullName}" uses a font format the 3D text engine can't outline (e.g. .ttc collections) — pick another style of it or a different font.`,
+    )
+  }
+}
+
 function loadFont(id: TextFontId): Promise<opentype.Font> {
   let cached = fontCache.get(id)
   if (!cached) {
-    const def = TEXT_FONTS.find((f) => f.id === id) ?? TEXT_FONTS[0]
-    // production builds inline the TTFs as data URLs (assetsInlineLimit) —
-    // decode directly; the dev server still hands out plain asset URLs
-    cached = def.url.startsWith('data:')
-      ? Promise.resolve(opentype.parse(dataUrlToArrayBuffer(def.url)))
-      : fetch(def.url)
-          .then((r) => {
-            if (!r.ok) throw new Error(`Font "${def.label}" could not be loaded.`)
-            return r.arrayBuffer()
-          })
-          .then((buf) => opentype.parse(buf))
+    if (id.startsWith('system:')) {
+      cached = loadSystemFont(id.slice('system:'.length))
+      // don't cache failures (font might get installed / permission granted)
+      cached.catch(() => fontCache.delete(id))
+    } else {
+      const def = TEXT_FONTS.find((f) => f.id === id) ?? TEXT_FONTS[0]
+      // production builds inline the TTFs as data URLs (assetsInlineLimit) —
+      // decode directly; the dev server still hands out plain asset URLs
+      cached = def.url.startsWith('data:')
+        ? Promise.resolve(opentype.parse(dataUrlToArrayBuffer(def.url)))
+        : fetch(def.url)
+            .then((r) => {
+              if (!r.ok) throw new Error(`Font "${def.label}" could not be loaded.`)
+              return r.arrayBuffer()
+            })
+            .then((buf) => opentype.parse(buf))
+    }
     fontCache.set(id, cached)
   }
   return cached

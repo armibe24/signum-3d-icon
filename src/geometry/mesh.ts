@@ -96,7 +96,17 @@ function toVectors(ring: Ring): THREE.Vector2[] {
   return ring.map(([x, y]) => new THREE.Vector2(x, y))
 }
 
-function polygonsToShapes(parts: MultiPolygon[]): THREE.Shape[] {
+function ringPerimeter(ring: THREE.Vector2[]): number {
+  let p = 0
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i]
+    const b = ring[(i + 1) % ring.length]
+    p += Math.hypot(b.x - a.x, b.y - a.y)
+  }
+  return p
+}
+
+function polygonsToShapes(parts: MultiPolygon[], bevelAmount: number): THREE.Shape[] {
   // tolerance scaled exactly like the reference: ~0.05% of the bbox diagonal
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
   for (const part of parts)
@@ -109,18 +119,34 @@ function polygonsToShapes(parts: MultiPolygon[]): THREE.Shape[] {
           if (y > maxY) maxY = y
         }
   const diag = isFinite(minX) ? Math.hypot(maxX - minX, maxY - minY) || 1 : 1
-  const minDist = diag * 0.0005 // ~0.05% of bbox diagonal
+  const baseDist = diag * 0.0005 // ~0.05% of bbox diagonal
   const collinearEps = 0.0015 // angular flatness threshold
+
+  // Bevel-aware corner merging. ExtrudeGeometry offsets every contour
+  // vertex along its corner bisector with no self-intersection handling —
+  // when two corners sit closer together than the bevel offset (fonts love
+  // micro-notches: JetBrains Mono's "M" has two corners nearly coincident),
+  // their offset vertices cross and the bevel band folds into a twisted
+  // facet ("tilted flat top"). Merging vertices closer than ~half the
+  // bevel amount removes those clusters at silhouette shifts far below the
+  // bevel's own size. Per ring the merge distance is capped so small
+  // closed rings (dots, counters of a/o/e) always keep enough points.
+  const bevelMerge = bevelAmount * 0.5
+  const cleanRing = (ring: THREE.Vector2[]): THREE.Vector2[] => {
+    const cap = ringPerimeter(ring) / 16
+    const minDist = Math.max(baseDist, Math.min(bevelMerge, cap))
+    return cleanPoints(ring, minDist, collinearEps)
+  }
 
   const entries: { shape: THREE.Shape; area: number }[] = []
   for (const part of parts) {
     for (const poly of part) {
       if (!poly.length) continue
-      const outer = cleanPoints(toVectors(poly[0]), minDist, collinearEps)
+      const outer = cleanRing(toVectors(poly[0]))
       if (outer.length < 3) continue
       const shape = new THREE.Shape(outer)
       for (let h = 1; h < poly.length; h++) {
-        const hole = cleanPoints(toVectors(poly[h]), minDist, collinearEps)
+        const hole = cleanRing(toVectors(poly[h]))
         if (hole.length >= 3) shape.holes.push(new THREE.Path(hole))
       }
       entries.push({ shape, area: Math.abs(THREE.ShapeUtils.area(outer)) })
@@ -205,13 +231,15 @@ function applyShading(geo: THREE.BufferGeometry, g: GeometrySettings): THREE.Buf
 
 export function assembleIconGeometry(parts: MultiPolygon[], g: GeometrySettings): AssembledGeometry {
   const warnings: string[] = []
-  const shapes = polygonsToShapes(parts)
+  const depth = Math.max(g.extrudeDepth, 0.1)
+  const bevelEnabled = g.bevelStyle !== 'none' && g.bevelAmount > 0.01
+  const amount = bevelEnabled ? Math.min(g.bevelAmount, depth * 0.49) : 0
+
+  const shapes = polygonsToShapes(parts, amount)
   if (!shapes.length) {
     return { geometry: new THREE.BufferGeometry(), warnings: ['No usable contours to extrude.'], partCount: 0 }
   }
 
-  const depth = Math.max(g.extrudeDepth, 0.1)
-  const bevelEnabled = g.bevelStyle !== 'none' && g.bevelAmount > 0.01
   const extrudeSettings: THREE.ExtrudeGeometryOptions = {
     depth,
     curveSegments: 1, // contours are already sampled polylines
@@ -219,7 +247,6 @@ export function assembleIconGeometry(parts: MultiPolygon[], g: GeometrySettings)
   }
   if (bevelEnabled) {
     // reference parameters: thickness/size from the amount, outward bevel
-    const amount = Math.min(g.bevelAmount, depth * 0.49)
     extrudeSettings.bevelThickness = amount
     extrudeSettings.bevelSize = amount
     extrudeSettings.bevelOffset = 0

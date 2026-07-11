@@ -20,6 +20,7 @@ import { geometryBuilder } from './geometry/build'
 import { store } from './store/store'
 import { normalizePlayTime } from './engine/animation'
 import { restoreSession, startSessionAutosave } from './utils/session'
+import { isDirty, markClean } from './utils/dirty'
 
 let wired = false
 
@@ -32,6 +33,29 @@ function wireEngine() {
   // reload never costs the user their adjustments
   restoreSession()
   startSessionAutosave()
+  markClean() // the restored (or fresh) state is the unsaved-changes baseline
+
+  // close warnings. In the Electron shell the MAIN process owns the close
+  // dialog (a renderer beforeunload would block the window silently) — we
+  // just keep it informed. In the browser, use the native beforeunload
+  // prompt. Session autosave still preserves everything either way.
+  const shell = window.signumShell
+  if (shell?.setDirty) {
+    let last = false
+    store.subscribe(() => {
+      const d = isDirty()
+      if (d !== last) {
+        last = d
+        shell.setDirty!(d)
+      }
+    })
+  } else {
+    window.addEventListener('beforeunload', (e) => {
+      if (!isDirty()) return
+      e.preventDefault()
+      e.returnValue = ''
+    })
+  }
 
   geometryBuilder.onGeometry(({ geometry }) => {
     sceneManager.setGeometry(geometry)

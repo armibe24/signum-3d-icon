@@ -78,11 +78,12 @@ export function parsePreset(json: string): AppSettings {
   const iconName = typeof icon.name === 'string' && icon.name ? icon.name : d.icon.name
   const iconSvg = typeof icon.svg === 'string' ? icon.svg : undefined
   const iconText = typeof icon.text === 'string' ? icon.text.slice(0, 200) : undefined
-  const iconFont = str(
-    icon.fontId,
-    ['dm-sans', 'dm-sans-bold', 'jetbrains-mono', 'jetbrains-mono-bold'] as const,
-    'dm-sans',
-  )
+  // bundled font ids, or "system:<postscript-name>" for installed fonts
+  const iconFont =
+    typeof icon.fontId === 'string' &&
+    /^(dm-sans|dm-sans-bold|jetbrains-mono|jetbrains-mono-bold|system:[\x20-\x7e]{1,120})$/.test(icon.fontId)
+      ? icon.fontId
+      : 'dm-sans'
   const validIcon =
     iconType === 'custom'
       ? iconSvg

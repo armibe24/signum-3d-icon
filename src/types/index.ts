@@ -5,7 +5,10 @@
    what undo history snapshots and JSON presets serialize.
    ============================================================ */
 
-export type TextFontId = 'dm-sans' | 'dm-sans-bold' | 'jetbrains-mono' | 'jetbrains-mono-bold'
+/** bundled font id, or `system:<postscript-name>` for a font installed on
+    the user's machine (Local Font Access API) */
+export type TextFontId = string
+export type BundledFontId = 'dm-sans' | 'dm-sans-bold' | 'jetbrains-mono' | 'jetbrains-mono-bold'
 
 export interface IconSource {
   type: 'lucide' | 'custom' | 'text'

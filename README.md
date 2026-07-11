@@ -43,7 +43,8 @@ The shell serves the unmodified `dist/` bundle through a privileged custom schem
 instead of `file://` — required because the app uses module Web Workers (geometry + GIF encoding),
 which Chromium denies to `file://` pages. The renderer runs fully sandboxed (context isolation on,
 node integration off); exports open a native save dialog. Packaging targets are preconfigured in
-`package.json → build` (Windows NSIS, macOS DMG, Linux AppImage).
+`package.json → build` (Windows NSIS as a normal assisted installer — welcome page, install
+location choice, shortcuts —, macOS DMG, Linux AppImage).
 
 **Fonts in the desktop shell**: production builds inline every local font as data URLs
 (`assetsInlineLimit` in `vite.config.ts` covers the woff2 UI fonts inside the CSS, and the 3D-text
@@ -145,10 +146,13 @@ export, so exported frames match the preview exactly and a keyframe timeline can
   dollar-sign, banknote, coins…); live grid previews, paged grid with "show more", empty state;
   custom SVG import via button or drag & drop; complexity/unsupported-feature warnings. All app
   UI icons come from the local lucide data (`src/components/common/Icon.tsx`) — no remote assets.
-- **3D text**: type any text and extrude it through the same SVG→3D pipeline. Fonts are the app's
-  own families bundled as local TTFs (`src/assets/fonts3d/`, SIL OFL), parsed with opentype.js —
-  no network, identical output inside an Electron shell. Multi-line supported; glyph holes
-  (a/b/e/o…) resolve correctly.
+- **3D text**: type any text and extrude it through the same SVG→3D pipeline. Fonts: the app's
+  own families bundled as local TTFs (`src/assets/fonts3d/`, SIL OFL) **plus every font installed
+  on the machine** via the Local Font Access API (`queryLocalFonts`, Chromium/Electron — "Show
+  system fonts…" in the text panel; the Electron shell grants exactly this permission). All fonts
+  are parsed with opentype.js — no network. Multi-line supported; glyph holes (a/b/e/o…) resolve
+  correctly, and contour corner-clusters are merged bevel-aware so micro-notches in font outlines
+  (e.g. JetBrains Mono's "M") can't fold the bevel into twisted facets.
 - **Typography**: DM Sans (UI) and JetBrains Mono (technical text) ship as local woff2 files in
   `src/assets/fonts/` with their OFL licenses — no external font requests.
 - **Geometry**: stroke width, extrude depth, bevel style (none / hard / rounded) with
@@ -182,6 +186,12 @@ export, so exported frames match the preview exactly and a keyframe timeline can
   progress bar + cancel; UI stays responsive during export.
 - **Presets & project**: full-state JSON save/load with validation and clamping (icon, geometry,
   material, lighting, background, animation, camera, export settings); new/reset project.
+- **Sidebar tabs**: an icon rail (local lucide icons) next to the sidebar gives every section —
+  Icon, Geometry, Material, Lighting, Background, Animation, Export — its own tab; tabs stay
+  mounted, so searches and drafts survive switching.
+- **Unsaved-changes warnings**: New project and Load preset ask first when the project has
+  unsaved adjustments (with a "Save preset" shortcut); closing the app warns too — natively in
+  the browser (`beforeunload`) and via a proper dialog in the Electron shell.
 - **Session autosave**: every adjustment is continuously saved to localStorage (validated on
   restore like a preset file), so a crash, reload or closed tab never loses work. The export
   pipeline additionally reuses one long-lived offscreen GL context and pauses the viewport

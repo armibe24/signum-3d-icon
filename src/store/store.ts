@@ -61,6 +61,8 @@ export interface AppState {
   toast: ToastState | null
   /** sidebar section that should open + scroll into view */
   openSection: string | null
+  /** active sidebar tab (icon rail) */
+  activeTab: string
   /** viewport camera zoom relative to the default distance, percent */
   zoomPct: number
   /** number of disconnected parts in the current geometry (per-part colors) */
@@ -82,6 +84,7 @@ let state: AppState = {
   exportJob: null,
   toast: null,
   openSection: null,
+  activeTab: 'icon',
   zoomPct: 100,
   partCount: 1,
   prefs: loadPrefs(),
@@ -186,7 +189,7 @@ export const store = {
   },
 
   requestSection(id: string) {
-    state = { ...state, openSection: id }
+    state = { ...state, openSection: id, activeTab: id }
     emit()
   },
 

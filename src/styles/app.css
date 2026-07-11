@@ -148,11 +148,21 @@
 /* ============================================================
    SIDEBAR
    ============================================================ */
-.sidebar{width:320px;flex-shrink:0;overflow-y:auto;overflow-x:hidden;
+.sidebar{width:364px;flex-shrink:0;display:flex;overflow:hidden;
   border-left:1px solid var(--line-strong);
   background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(12,28,35,.72));
-  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-  padding:6px 16px 32px}
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+
+.side-rail{width:46px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;
+  gap:5px;padding:12px 0;border-right:1px solid var(--line)}
+.rail-btn{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;
+  justify-content:center;color:var(--ink-soft);background:none;border:1px solid transparent;
+  transition:background var(--transition-fast),color var(--transition-fast)}
+.rail-btn:hover{color:var(--sky-blue);background:rgba(255,255,255,.07)}
+.rail-btn.active{color:#03161c;background:linear-gradient(180deg,#7fdcf4,#46b3cc);
+  box-shadow:var(--gloss-inset),0 3px 10px rgba(70,179,204,.45)}
+
+.side-panel{flex:1;min-width:0;overflow-y:auto;overflow-x:hidden;padding:6px 16px 32px}
 
 .side-section{padding:14px 0 18px}
 .side-section+.side-section{border-top:1px solid var(--line)}

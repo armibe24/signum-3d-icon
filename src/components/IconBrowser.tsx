@@ -18,7 +18,12 @@ import { setSlice, store, useStore } from '../store/store'
 import { pickFile, readFileText } from '../utils/file'
 import { Icon } from './common/Icon'
 import { Select } from './common/Select'
-import { TEXT_FONTS } from '../text/textToSvg'
+import {
+  TEXT_FONTS,
+  listSystemFonts,
+  systemFontsAvailable,
+  type SystemFontEntry,
+} from '../text/textToSvg'
 import type { TextFontId } from '../types'
 
 /** page size — search always runs over the FULL catalog, this only
@@ -65,6 +70,7 @@ export function IconBrowser() {
   const [fontDraft, setFontDraft] = useState<TextFontId>(
     icon.type === 'text' ? (icon.fontId ?? 'dm-sans') : 'dm-sans',
   )
+  const [systemFonts, setSystemFonts] = useState<SystemFontEntry[] | null>(null)
 
   const applyText = (text: string, fontId: TextFontId) => {
     const clean = text.trim()
@@ -170,12 +176,39 @@ export function IconBrowser() {
           />
           <Select
             value={fontDraft}
-            options={TEXT_FONTS.map((f) => ({ value: f.id, label: f.label }))}
+            options={[
+              ...TEXT_FONTS.map((f) => ({ value: f.id as string, label: f.label })),
+              ...(systemFonts ?? []).map((f) => ({
+                value: f.id,
+                label: f.style === 'Regular' ? f.family : `${f.family} — ${f.style}`,
+              })),
+              // keep a restored system font selectable before the list is loaded
+              ...(fontDraft.startsWith('system:') && !systemFonts
+                ? [{ value: fontDraft, label: fontDraft.slice('system:'.length) }]
+                : []),
+            ]}
             onChange={(v) => {
               setFontDraft(v)
               if (icon.type === 'text' && textDraft.trim()) applyText(textDraft, v)
             }}
           />
+          {systemFontsAvailable() && !systemFonts && (
+            <button
+              type="button"
+              className="btn btn--sm"
+              style={{ justifyContent: 'center' }}
+              onClick={async () => {
+                try {
+                  setSystemFonts(await listSystemFonts())
+                } catch (e) {
+                  store.toast(e instanceof Error ? e.message : 'Could not list system fonts.', 'error')
+                }
+              }}
+            >
+              <Icon name="folder-search" size={12} strokeWidth={2.2} />
+              Show system fonts…
+            </button>
+          )}
           <button
             type="button"
             className="btn btn--sm"
