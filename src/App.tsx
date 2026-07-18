@@ -21,8 +21,12 @@ import { store } from './store/store'
 import { normalizePlayTime } from './engine/animation'
 import { restoreSession, startSessionAutosave } from './utils/session'
 import { isDirty, markClean } from './utils/dirty'
+import { ConfirmModal } from './components/common/ConfirmModal'
+import { useStore } from './store/store'
 
 let wired = false
+/** set right before an intentional close so beforeunload lets it through */
+const allowClose = { current: false }
 
 /** one-time store→engine wiring (module-level so StrictMode double-mount is safe) */
 function wireEngine() {
@@ -35,27 +39,16 @@ function wireEngine() {
   startSessionAutosave()
   markClean() // the restored (or fresh) state is the unsaved-changes baseline
 
-  // close warnings. In the Electron shell the MAIN process owns the close
-  // dialog (a renderer beforeunload would block the window silently) — we
-  // just keep it informed. In the browser, use the native beforeunload
-  // prompt. Session autosave still preserves everything either way.
-  const shell = window.signumShell
-  if (shell?.setDirty) {
-    let last = false
-    store.subscribe(() => {
-      const d = isDirty()
-      if (d !== last) {
-        last = d
-        shell.setDirty!(d)
-      }
-    })
-  } else {
-    window.addEventListener('beforeunload', (e) => {
-      if (!isDirty()) return
-      e.preventDefault()
-      e.returnValue = ''
-    })
-  }
+  // close warning — the Sonitus flow: beforeunload blocks the close while
+  // dirty; in the Electron shell that block is silent, so the renderer
+  // shows its own themed Close Window dialog (never a native window).
+  // Confirming sets allowClose and re-issues window.close().
+  window.addEventListener('beforeunload', (e) => {
+    if (allowClose.current || !isDirty()) return
+    e.preventDefault()
+    e.returnValue = ''
+    if (window.signumShell?.isElectron) store.setTransient({ closeRequested: true })
+  })
 
   geometryBuilder.onGeometry(({ geometry }) => {
     sceneManager.setGeometry(geometry)
@@ -151,6 +144,8 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  const closeRequested = useStore((s) => s.closeRequested)
+
   return (
     <div className="app">
       <TopBar />
@@ -160,6 +155,23 @@ export default function App() {
       </div>
       <Timeline />
       <Toast />
+      {closeRequested && (
+        <ConfirmModal
+          title="Close Window"
+          message={
+            <>
+              You have <b>unsaved changes</b>. They are kept by the session autosave and restored
+              on the next launch, but they are not saved as a preset file.
+            </>
+          }
+          confirmLabel="Close anyway"
+          onConfirm={() => {
+            allowClose.current = true
+            window.close()
+          }}
+          onClose={() => store.setTransient({ closeRequested: false })}
+        />
+      )}
     </div>
   )
 }

@@ -10,7 +10,5 @@ interface Window {
   signumShell?: {
     isElectron: boolean
     versions?: { electron: string; chrome: string }
-    /** informs the main process whether closing should warn */
-    setDirty?: (dirty: boolean) => void
   }
 }

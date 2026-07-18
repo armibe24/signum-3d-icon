@@ -15,7 +15,7 @@
    web workers / WebCodecs, exactly like in the browser.
    ============================================================ */
 
-const { app, BrowserWindow, protocol, shell, dialog, ipcMain } = require('electron')
+const { app, BrowserWindow, protocol, shell, dialog } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 
@@ -112,31 +112,10 @@ function createWindow() {
     item.setSaveDialogOptions({ title: 'Save export', defaultPath: item.getFilename() })
   })
 
-  // unsaved-changes close warning — the renderer reports its dirty state
-  // via the preload bridge; the session autosave still restores everything
-  // on the next launch, this dialog just prevents accidental closes
-  let dirty = false
-  const onDirty = (event, value) => {
-    if (event.sender === win.webContents) dirty = value
-  }
-  ipcMain.on('signum:set-dirty', onDirty)
-  win.on('close', (event) => {
-    if (!dirty) return
-    const choice = dialog.showMessageBoxSync(win, {
-      type: 'warning',
-      title: 'Unsaved changes',
-      message: 'You have unsaved changes.',
-      detail:
-        'Your adjustments are kept by the session autosave and will be restored on the next launch, ' +
-        'but they are not saved as a preset file.',
-      buttons: ['Close anyway', 'Cancel'],
-      defaultId: 1,
-      cancelId: 1,
-      noLink: true,
-    })
-    if (choice !== 0) event.preventDefault()
-  })
-  win.on('closed', () => ipcMain.removeListener('signum:set-dirty', onDirty))
+  // NOTE: unsaved-changes close confirmation is handled entirely inside
+  // the renderer (an in-app themed dialog, never a native window): a
+  // beforeunload handler cancels the close while dirty and the web app
+  // shows its Close Window modal; confirming re-issues window.close().
 
   // the app is single-page and local-only — block navigation and popups
   win.webContents.setWindowOpenHandler(({ url }) => {

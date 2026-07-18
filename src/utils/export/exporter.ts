@@ -23,8 +23,7 @@ import { store } from '../../store/store'
 import { downloadBlob, safeFileName } from '../file'
 import { acquireExportRenderer, releaseExportRenderer, type ExportRenderer } from './renderer'
 import { sceneManager } from '../../engine/SceneManager'
-import { encodeMp4Frame, createMp4Encoder } from './videoMp4'
-import { createWebmEncoder } from './videoWebm'
+import { createMp4Encoder, createWebmEncoder } from './video'
 import { createGifEncoder } from './gif'
 import { createPngSequenceCollector } from './pngSequence'
 
@@ -199,5 +198,3 @@ export interface AnimationEncoder {
   /** release all resources without producing output (cancel / failure) */
   abort(): void
 }
-
-export { encodeMp4Frame }

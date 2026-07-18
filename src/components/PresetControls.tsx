@@ -9,12 +9,18 @@ import { markClean } from '../utils/dirty'
 import { sceneManager } from '../engine/SceneManager'
 import { defaultSettings } from '../types'
 
-export async function savePresetFile(): Promise<void> {
+/** default name offered in the Save Preset dialog */
+export function defaultPresetName(): string {
+  return `${safeFileName(store.get().settings.icon.name)}-preset`
+}
+
+export function savePresetAs(name: string): void {
   const settings = { ...store.get().settings, camera: sceneManager.getCameraState() }
   const json = serializePreset(settings)
-  downloadBlob(new Blob([json], { type: 'application/json' }), `${safeFileName(settings.icon.name)}-preset.json`)
+  const file = safeFileName(name.trim() || defaultPresetName())
+  downloadBlob(new Blob([json], { type: 'application/json' }), `${file}.json`)
   markClean()
-  store.toast('Preset saved')
+  store.toast(`Preset "${file}" saved`)
 }
 
 export async function loadPresetFile(): Promise<void> {

@@ -1,12 +1,8 @@
-import { createPortal } from 'react-dom'
-import { Icon } from './common/Icon'
-import logoUrl from '../../branding/logo.svg'
+import { Modal } from './common/Modal'
+import { Logo } from './common/Logo'
 import pkg from '../../package.json'
 
-/* Rendered through a portal: the topbar's backdrop-filter makes it a
-   containing block for position:fixed, which would trap the overlay
-   inside the header strip (the original "bugged About" layout).
-   Structure mirrors the Sonitus About modal: app header with logo +
+/* Structure mirrors the Sonitus About modal: app header with logo +
    version, app license, third-party libraries / icons / fonts with
    their licenses, then the practical reference tables. */
 
@@ -16,7 +12,7 @@ const LIBRARIES: [name: string, license: string, usedFor: string][] = [
   ['polygon-clipping', 'MIT', 'outline boolean union'],
   ['opentype.js', 'MIT', 'font glyph outlines'],
   ['gifenc', 'MIT', 'GIF encoding'],
-  ['mp4-muxer / webm-muxer', 'MIT', 'video export containers'],
+  ['mediabunny', 'MPL-2.0', 'MP4 / WebM export'],
   ['fflate', 'MIT', 'PNG-sequence ZIP'],
   ['vite', 'MIT', 'build tooling'],
   ['typescript', 'Apache-2.0', 'build tooling'],
@@ -30,23 +26,15 @@ const ICON_SETS: [name: string, license: string][] = [
 ]
 
 export function AboutModal({ onClose }: { onClose: () => void }) {
-  return createPortal(
-    <div className="overlay" onClick={onClose}>
-      <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <h2>About</h2>
-          <button type="button" className="iconbtn" onClick={onClose} title="Close">
-            <Icon name="x" size={13} strokeWidth={2.2} />
-          </button>
+  return (
+    <Modal title="About" onClose={onClose}>
+      <div className="about-head">
+        <Logo className="about-logo" size={44} />
+        <div>
+          <h3 className="about-name">Signum — 3D Icon Studio</h3>
+          <p className="about-version">Version {pkg.version}</p>
         </div>
-        <div className="modal-body">
-          <div className="about-head">
-            <img className="about-logo" src={logoUrl} alt="" width={44} height={44} />
-            <div>
-              <h3 className="about-name">Signum — 3D Icon Studio</h3>
-              <p className="about-version">Version {pkg.version}</p>
-            </div>
-          </div>
+      </div>
           <p className="modal-note">
             A professional 3D icon studio. Convert stroke icons, SVGs and text into solid 3D forms,
             adjust geometry, materials, lighting and motion, then export stills or animations. All
@@ -110,9 +98,6 @@ export function AboutModal({ onClose }: { onClose: () => void }) {
               <tr><td>MOV + alpha</td><td>convert PNG sequence locally</td></tr>
             </tbody>
           </table>
-        </div>
-      </div>
-    </div>,
-    document.body,
+    </Modal>
   )
 }

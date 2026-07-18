@@ -33,11 +33,17 @@ npm run dev                # …and in a second terminal:
 npm run electron:dev       # Electron pointed at the Vite dev server (HMR)
 ```
 
-**Branding**: the app logo and icons live in `branding/` (`logo.svg`, `icon.png`, `icon.ico`) —
-swap those files to rebrand. The top bar and favicon use `logo.svg`/`icon.ico`; the Electron
-window icon uses `icon.png`; and electron-builder reads the same folder (`buildResources`) for
-the installer icons (`.ico` on Windows; macOS `.icns` is auto-generated from the 512px
-`icon.png`).
+**Branding**: everything lives in `branding/` — swap the files to rebrand. `signum.svg` is the
+logo mark (its fixed fill is rewritten to `currentColor` at import, so the in-app logo follows
+every theme via the `--logo-color` token); `signum.ico` is the favicon and Windows installer
+icon (copied to `icon.ico` for electron-builder); `signum.png` is the source tile and
+`icon.png` (512px, regenerated from it) feeds the Electron window icon plus the auto-generated
+macOS `.icns`. electron-builder reads this folder as `buildResources`.
+
+**Dialogs**: About, New Project, Load Preset, Save Preset (named), and the unsaved-changes /
+Close Window confirmations are all custom in-app modals in the Sonitus structure — no native OS
+dialogs. In the Electron shell the close confirmation works via `beforeunload`: the close is
+blocked while dirty and the app's own themed dialog re-issues `window.close()` on confirm.
 
 The shell serves the unmodified `dist/` bundle through a privileged custom scheme (`app://`)
 instead of `file://` — required because the app uses module Web Workers (geometry + GIF encoding),
@@ -113,7 +119,7 @@ src/
                     lights, background, animation evaluation (pure fn of time)
   utils/
     export/         export renderer (2nd offscreen WebGL context), stills,
-                    mp4 (WebCodecs+mp4-muxer), webm (VP9+webm-muxer),
+                    mp4 / webm (WebCodecs via mediabunny),
                     gif (worker), png-sequence (fflate zip)
     presets.ts      JSON preset serialize + defensive validation
     file.ts         downloads / file pickers

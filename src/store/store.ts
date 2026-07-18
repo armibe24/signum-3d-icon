@@ -63,6 +63,9 @@ export interface AppState {
   openSection: string | null
   /** active sidebar tab (icon rail) */
   activeTab: string
+  /** Electron shell asked to close while there are unsaved changes —
+      the in-app Close Window dialog is showing */
+  closeRequested: boolean
   /** viewport camera zoom relative to the default distance, percent */
   zoomPct: number
   /** number of disconnected parts in the current geometry (per-part colors) */
@@ -85,6 +88,7 @@ let state: AppState = {
   toast: null,
   openSection: null,
   activeTab: 'icon',
+  closeRequested: false,
   zoomPct: 100,
   partCount: 1,
   prefs: loadPrefs(),
