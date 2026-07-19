@@ -158,8 +158,9 @@ function loadFont(id: TextFontId): Promise<opentype.Font> {
 /**
  * Render `text` into standalone SVG markup with filled glyph outlines.
  * Supports multiple lines (\n) with a line height of 1.25em.
+ * `letterSpacing` adds extra character spacing, in em (0 = font default).
  */
-export async function textToSvg(text: string, fontId: TextFontId): Promise<string> {
+export async function textToSvg(text: string, fontId: TextFontId, letterSpacing = 0): Promise<string> {
   const trimmed = text.replace(/\r/g, '')
   if (!trimmed.trim()) throw new Error('Enter some text first.')
   const font = await loadFont(fontId)
@@ -172,7 +173,7 @@ export async function textToSvg(text: string, fontId: TextFontId): Promise<strin
   let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity
   lines.forEach((line, i) => {
     if (!line.trim()) return
-    const path = font.getPath(line, 0, i * lineHeight, size, { kerning: true })
+    const path = font.getPath(line, 0, i * lineHeight, size, { kerning: true, letterSpacing })
     const bb = path.getBoundingBox()
     if (bb.x1 < x1) x1 = bb.x1
     if (bb.y1 < y1) y1 = bb.y1

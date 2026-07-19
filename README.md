@@ -157,7 +157,9 @@ export, so exported frames match the preview exactly and a keyframe timeline can
   on the machine** via the Local Font Access API (`queryLocalFonts`, Chromium/Electron — "Show
   system fonts…" in the text panel; the Electron shell grants exactly this permission). All fonts
   are parsed with opentype.js — no network. Multi-line supported; glyph holes (a/b/e/o…) resolve
-  correctly, and contour corner-clusters are merged bevel-aware so micro-notches in font outlines
+  correctly; **letter spacing** (em) and a **curve quality** control (up to 80 subdivisions,
+  default 32 — noticeably smoother glyph curves than the icon quality presets) are per-text
+  settings, and contour corner-clusters are merged bevel-aware so micro-notches in font outlines
   (e.g. JetBrains Mono's "M") can't fold the bevel into twisted facets.
 - **Typography**: DM Sans (UI) and JetBrains Mono (technical text) ship as local woff2 files in
   `src/assets/fonts/` with their OFL licenses — no external font requests.
@@ -179,11 +181,12 @@ export, so exported frames match the preview exactly and a keyframe timeline can
   first, unset parts follow the base color, and color changes never trigger a geometry rebuild.
 - **Lighting**: studio / softbox / dramatic side / top presets; ambient, key, fill, rim
   intensities; key light azimuth/elevation; shadows + soft shadows; **custom HDRI** — load an
-  equirectangular `.hdr` (Radiance) or any LDR image as the image-based-lighting environment,
-  used identically by the viewport and every export.
+  equirectangular `.hdr` (Radiance), `.exr` (OpenEXR) or any LDR image as the image-based-
+  lighting environment, used identically by the viewport and every export.
 - **Backgrounds**: transparent, checkerboard preview, solid, gradient, studio backdrop, or a
   **loaded image** — cover-cropped behind the object at the viewport aspect and again at the
-  exact export aspect, so exports never stretch the backdrop.
+  exact export aspect, so exports never stretch the backdrop; zoom and horizontal/vertical
+  position controls move the image within the crop (it always keeps filling the frame).
 - **Animation**: static, spin X/Y, turntable, slow turn, wobble, floating wobble, reveal
   (start→end rotation), bounce-in; duration, FPS, loop, speed/turns, direction, easing,
   start/end rotation; play/pause (preview never autoplays); Sonitus-style timeline with

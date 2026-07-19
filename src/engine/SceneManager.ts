@@ -269,7 +269,7 @@ export class SceneManager {
     if (!this.lastBackground || !backgroundIsImage(this.lastBackground)) return
     const bg = this.scene.background
     if (bg && (bg as THREE.Texture).isTexture) {
-      applyBackgroundCover(bg as THREE.Texture, this.camera.aspect)
+      applyBackgroundCover(bg as THREE.Texture, this.camera.aspect, this.lastBackground)
     }
   }
 

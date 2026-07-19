@@ -14,6 +14,7 @@
 
 import * as THREE from 'three'
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
+import { EXRLoader } from 'three/addons/loaders/EXRLoader.js'
 
 let current: THREE.Texture | null = null
 let currentKey = ''
@@ -35,7 +36,11 @@ export function getCustomEnvironment(): THREE.Texture | null {
  * URL; `type` distinguishes real HDR (.hdr RGBE) from plain LDR images.
  * Repeated calls with the same map are no-ops.
  */
-export function setCustomEnvironment(dataUrl: string, type: 'hdr' | 'ldr', onError?: (msg: string) => void): void {
+export function setCustomEnvironment(
+  dataUrl: string,
+  type: 'hdr' | 'exr' | 'ldr',
+  onError?: (msg: string) => void,
+): void {
   const key = dataUrl ? `${type}:${dataUrl.length}:${dataUrl.slice(-64)}` : ''
   if (key === currentKey) return
   currentKey = key
@@ -66,6 +71,8 @@ export function setCustomEnvironment(dataUrl: string, type: 'hdr' | 'ldr', onErr
 
   if (type === 'hdr') {
     new RGBELoader().load(dataUrl, finish, undefined, fail)
+  } else if (type === 'exr') {
+    new EXRLoader().load(dataUrl, finish, undefined, fail)
   } else {
     new THREE.TextureLoader().load(
       dataUrl,

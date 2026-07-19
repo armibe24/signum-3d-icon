@@ -18,6 +18,7 @@ import { setSlice, store, useStore } from '../store/store'
 import { pickFile, readFileText } from '../utils/file'
 import { Icon } from './common/Icon'
 import { Select } from './common/Select'
+import { Slider } from './common/Slider'
 import { FontSelect } from './common/FontSelect'
 import {
   TEXT_FONTS,
@@ -25,7 +26,7 @@ import {
   systemFontsAvailable,
   type SystemFontEntry,
 } from '../text/textToSvg'
-import type { TextFontId } from '../types'
+import { DEFAULT_TEXT_DETAIL, MAX_TEXT_DETAIL, type TextFontId } from '../types'
 
 /** page size — search always runs over the FULL catalog, this only
     limits how many previews are mounted at once */
@@ -71,9 +72,18 @@ export function IconBrowser() {
   const [fontDraft, setFontDraft] = useState<TextFontId>(
     icon.type === 'text' ? (icon.fontId ?? 'dm-sans') : 'dm-sans',
   )
+  const [spacingDraft, setSpacingDraft] = useState(icon.type === 'text' ? (icon.letterSpacing ?? 0) : 0)
+  const [detailDraft, setDetailDraft] = useState(
+    icon.type === 'text' ? (icon.textDetail ?? DEFAULT_TEXT_DETAIL) : DEFAULT_TEXT_DETAIL,
+  )
   const [systemFonts, setSystemFonts] = useState<SystemFontEntry[] | null>(null)
 
-  const applyText = (text: string, fontId: TextFontId) => {
+  const applyText = (
+    text: string,
+    fontId: TextFontId,
+    letterSpacing = spacingDraft,
+    textDetail = detailDraft,
+  ) => {
     const clean = text.trim()
     if (!clean) return
     setSlice('icon', {
@@ -81,6 +91,8 @@ export function IconBrowser() {
       name: clean.replace(/\s+/g, ' ').slice(0, 24),
       text,
       fontId,
+      letterSpacing,
+      textDetail,
       svg: undefined,
     })
   }
@@ -223,6 +235,17 @@ export function IconBrowser() {
               Show system fonts…
             </button>
           )}
+          <Slider label="Letter spacing" value={spacingDraft} min={-0.1} max={0.5} step={0.01}
+            decimals={2} unit="em"
+            onChange={(v) => {
+              setSpacingDraft(v)
+              if (icon.type === 'text' && textDraft.trim()) applyText(textDraft, fontDraft, v, detailDraft)
+            }} />
+          <Slider label="Curve quality" value={detailDraft} min={8} max={MAX_TEXT_DETAIL} step={2}
+            onChange={(v) => {
+              setDetailDraft(v)
+              if (icon.type === 'text' && textDraft.trim()) applyText(textDraft, fontDraft, spacingDraft, v)
+            }} />
           <button
             type="button"
             className="btn btn--sm"

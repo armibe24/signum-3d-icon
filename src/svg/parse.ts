@@ -60,10 +60,19 @@ function toPairs(points: { x: number; y: number }[]): Pair[] {
 /**
  * Parse SVG markup into sampled stroke polylines and fill polygons.
  * @param strokeScale multiplier applied to every resolved stroke width
+ * @param divisionsOverride explicit curve sampling divisions (e.g. the 3D
+ *   text "curve quality" control); falls back to the quality preset
  */
-export function parseSvg(svgText: string, quality: GeometryQuality, strokeScale: number): ParsedSvg {
+export function parseSvg(
+  svgText: string,
+  quality: GeometryQuality,
+  strokeScale: number,
+  divisionsOverride?: number,
+): ParsedSvg {
   const warnings = collectDomWarnings(svgText)
-  const divisions = CURVE_DIVISIONS[quality]
+  const divisions = divisionsOverride
+    ? Math.min(Math.max(Math.round(divisionsOverride), 4), 120)
+    : CURVE_DIVISIONS[quality]
   const strokes: StrokeElement[] = []
   const fills: FillElement[] = []
 

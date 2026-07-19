@@ -79,23 +79,32 @@ function imageTexture(dataUrl: string, onReady?: () => void): THREE.Texture {
 }
 
 /**
- * CSS `background-size: cover` for a scene-background texture: crop via
- * repeat/offset so the image fills the view without distortion. Safe to
- * call every frame — it's a handful of property writes.
+ * CSS `background-size: cover` for a scene-background texture — crop via
+ * repeat/offset so the image fills the view without distortion — plus the
+ * user's zoom (imageScale ≥ 1) and pan (imageX/imageY in -1..1, mapped to
+ * the currently croppable range so the image always keeps covering the
+ * view). Safe to call every frame — it's a handful of property writes.
  */
-export function applyBackgroundCover(texture: THREE.Texture, viewAspect: number): void {
+export function applyBackgroundCover(texture: THREE.Texture, viewAspect: number, b?: BackgroundSettings): void {
   const img = texture.image as { width?: number; height?: number } | undefined
   if (!img?.width || !img.height) return
   const imageAspect = img.width / img.height
-  if (imageAspect > viewAspect) {
-    const r = viewAspect / imageAspect
-    texture.repeat.set(r, 1)
-    texture.offset.set((1 - r) / 2, 0)
-  } else {
-    const r = imageAspect / viewAspect
-    texture.repeat.set(1, r)
-    texture.offset.set(0, (1 - r) / 2)
-  }
+  let rx = 1
+  let ry = 1
+  if (imageAspect > viewAspect) rx = viewAspect / imageAspect
+  else ry = imageAspect / viewAspect
+
+  const scale = Math.min(Math.max(b?.imageScale ?? 1, 1), 8)
+  rx /= scale
+  ry /= scale
+
+  const panX = Math.min(Math.max(b?.imageX ?? 0, -1), 1)
+  const panY = Math.min(Math.max(b?.imageY ?? 0, -1), 1)
+  texture.repeat.set(rx, ry)
+  texture.offset.set(
+    (1 - rx) / 2 + (panX * (1 - rx)) / 2,
+    (1 - ry) / 2 - (panY * (1 - ry)) / 2,
+  )
 }
 
 export function resolveBackground(b: BackgroundSettings, onImageReady?: () => void): ResolvedBackground {

@@ -1,6 +1,11 @@
 import { Modal } from './common/Modal'
 import { Logo } from './common/Logo'
 import pkg from '../../package.json'
+import confiniumRaw from '../../branding/confinium_logo.svg?raw'
+
+const confiniumSvg = confiniumRaw
+  .replace(/fill="#fff"/gi, 'fill="currentColor"')
+  .replace(/width="[^"]*"\s+height="[^"]*"/, 'width="100%" height="100%"')
 
 /* Structure mirrors the Sonitus About modal: app header with logo +
    version, app license, third-party libraries / icons / fonts with
@@ -98,6 +103,15 @@ export function AboutModal({ onClose }: { onClose: () => void }) {
               <tr><td>MOV + alpha</td><td>convert PNG sequence locally</td></tr>
             </tbody>
           </table>
+
+          <div className="about-credit">
+            <span
+              className="about-credit-logo"
+              aria-hidden="true"
+              dangerouslySetInnerHTML={{ __html: confiniumSvg }}
+            />
+            Made by Confinium
+          </div>
     </Modal>
   )
 }

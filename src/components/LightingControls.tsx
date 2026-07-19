@@ -39,21 +39,23 @@ export function LightingControls() {
         onChange={(v) => setSlice('lighting', { softShadows: v })} />
 
       <ImageField label="Environment (HDRI / image)" value={l.envMap} name={l.envMapName}
-        accept=".hdr,image/png,image/jpeg,image/webp" buttonText="Load HDRI / image…"
-        noPreview={l.envMapType === 'hdr'}
+        accept=".hdr,.exr,image/png,image/jpeg,image/webp" buttonText="Load HDRI / image…"
+        noPreview={l.envMapType !== 'ldr'}
         onPick={async (file) => {
           try {
-            const isHdr = /\.hdr$/i.test(file.name)
-            const envMap = isHdr ? await binaryFileToDataUrl(file) : await imageFileToDataUrl(file)
-            setSlice('lighting', { envMap, envMapName: file.name, envMapType: isHdr ? 'hdr' : 'ldr' })
+            const envMapType = /\.hdr$/i.test(file.name) ? 'hdr' : /\.exr$/i.test(file.name) ? 'exr' : 'ldr'
+            const envMap =
+              envMapType === 'ldr' ? await imageFileToDataUrl(file) : await binaryFileToDataUrl(file)
+            setSlice('lighting', { envMap, envMapName: file.name, envMapType })
           } catch (e) {
             store.toast(e instanceof Error ? e.message : 'Could not load the environment map.', 'error')
           }
         }}
         onClear={() => setSlice('lighting', { envMap: '', envMapName: '', envMapType: 'ldr' })} />
       <p className="export-note">
-        Equirectangular (360°) images work best. The environment drives reflections and image-based
-        lighting; its strength is the material’s <b>Environment</b> slider.
+        Equirectangular (360°) images work best — <b>.hdr</b>, <b>.exr</b> or any regular image.
+        The environment drives reflections and image-based lighting; its strength is the
+        material’s <b>Environment</b> slider.
       </p>
     </div>
   )

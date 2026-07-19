@@ -98,7 +98,7 @@ export class ExportRenderer {
     scene.background = resolved.texture ?? resolved.clearColor
     if (resolved.texture && backgroundIsImage(background)) {
       // crop to the EXPORT aspect (the viewport re-crops itself each frame)
-      applyBackgroundCover(resolved.texture, this.width / this.height)
+      applyBackgroundCover(resolved.texture, this.width / this.height, background)
     }
 
     sceneManager.applyPose(anim, time)

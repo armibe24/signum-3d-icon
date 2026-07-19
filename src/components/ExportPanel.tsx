@@ -91,14 +91,14 @@ export function ExportPanel() {
         </div>
       ) : (
         <div className="export-btns">
-          <button type="button" className="btn btn--teal"
+          <button type="button" className="btn btn--sm"
             onClick={() => exportStill(store.get().settings).catch((e) => store.toast(String(e), 'error'))}>
-            <Icon name="image-down" size={14} strokeWidth={2.2} />
+            <Icon name="image-down" size={12} strokeWidth={2.2} />
             Still
           </button>
-          <button type="button" className="btn btn--cyan"
+          <button type="button" className="btn btn--sm"
             onClick={() => exportAnimation(store.get().settings)}>
-            <Icon name="clapperboard" size={14} strokeWidth={2.2} />
+            <Icon name="clapperboard" size={12} strokeWidth={2.2} />
             Animation
           </button>
         </div>

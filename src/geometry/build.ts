@@ -18,7 +18,7 @@
 
 import type * as THREE from 'three'
 import { store } from '../store/store'
-import type { AppSettings, MultiPolygon } from '../types'
+import { DEFAULT_TEXT_DETAIL, type AppSettings, type MultiPolygon } from '../types'
 import { parseSvg } from '../svg/parse'
 import type { SvgWorkerRequest, SvgWorkerResponse } from '../svg/types'
 import { assembleIconGeometry, geometryLooksValid } from './mesh'
@@ -42,7 +42,7 @@ function polygonKey(s: AppSettings): string {
     s.icon.type === 'lucide'
       ? `l:${s.icon.name}`
       : s.icon.type === 'text'
-        ? `t:${s.icon.fontId ?? 'dm-sans'}:${hashString(s.icon.text ?? '')}`
+        ? `t:${s.icon.fontId ?? 'dm-sans'}:${hashString(s.icon.text ?? '')}:${s.icon.letterSpacing ?? 0}:${s.icon.textDetail ?? DEFAULT_TEXT_DETAIL}`
         : `c:${hashString(s.icon.svg ?? '')}`
   return JSON.stringify([iconKey, g.strokeWidth, g.combine, g.quality, g.normalizeSize])
 }
@@ -130,7 +130,14 @@ class GeometryBuilder {
       } else {
         const svgText = await this.resolveSvg(settings)
         if (id !== this.runId) return
-        const parsed = parseSvg(svgText, g.quality, g.strokeWidth)
+        const parsed = parseSvg(
+          svgText,
+          g.quality,
+          g.strokeWidth,
+          // 3D text has its own curve-quality control (glyph outlines are
+          // curve-heavy; the icon quality presets sample them too coarsely)
+          settings.icon.type === 'text' ? (settings.icon.textDetail ?? DEFAULT_TEXT_DETAIL) : undefined,
+        )
         const response = await this.request({
           op: 'process',
           id: ++this.msgId,
@@ -173,7 +180,7 @@ class GeometryBuilder {
       return settings.icon.svg
     }
     if (settings.icon.type === 'text') {
-      return textToSvg(settings.icon.text ?? '', settings.icon.fontId ?? 'dm-sans')
+      return textToSvg(settings.icon.text ?? '', settings.icon.fontId ?? 'dm-sans', settings.icon.letterSpacing ?? 0)
     }
     const svg = await resolveIconSvg(settings.icon.name, '#000')
     if (!svg) throw new Error(`Unknown icon "${settings.icon.name}".`)

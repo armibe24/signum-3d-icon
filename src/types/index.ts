@@ -20,7 +20,16 @@ export interface IconSource {
   text?: string
   /** bundled local font for text (type 'text') */
   fontId?: TextFontId
+  /** additional character spacing, in em (type 'text'); 0 = font default */
+  letterSpacing?: number
+  /** curve sampling quality for glyph outlines (type 'text'); higher =
+      smoother curves, more polygons */
+  textDetail?: number
 }
+
+/** default curve divisions for 3D text (smoother than icon 'balanced') */
+export const DEFAULT_TEXT_DETAIL = 32
+export const MAX_TEXT_DETAIL = 80
 
 export type GeometryQuality = 'fast' | 'balanced' | 'high'
 export type BevelStyle = 'none' | 'hard' | 'rounded'
@@ -99,12 +108,12 @@ export interface LightingSettings {
   keyElevation: number
   shadows: boolean
   softShadows: boolean
-  /** custom image-based lighting: equirectangular .hdr or LDR image as a
-      data URL; empty = the built-in procedural studio environment */
+  /** custom image-based lighting: equirectangular .hdr/.exr or LDR image
+      as a data URL; empty = the built-in procedural studio environment */
   envMap: string
   envMapName: string
-  /** 'hdr' = Radiance RGBE file, 'ldr' = plain image (png/jpg/webp) */
-  envMapType: 'hdr' | 'ldr'
+  /** 'hdr' = Radiance RGBE, 'exr' = OpenEXR, 'ldr' = plain image */
+  envMapType: 'hdr' | 'exr' | 'ldr'
 }
 
 export type BackgroundMode = 'transparent' | 'checkerboard' | 'solid' | 'gradient' | 'studio' | 'image'
@@ -117,6 +126,11 @@ export interface BackgroundSettings {
   /** user-loaded backdrop for 'image' mode (data URL, cover-cropped) */
   image: string
   imageName: string
+  /** backdrop zoom: 1 = exact cover fit, >1 zooms into the image */
+  imageScale: number
+  /** backdrop pan within the croppable range, -1..1 per axis */
+  imageX: number
+  imageY: number
 }
 
 export type AnimationPresetId =
@@ -244,7 +258,16 @@ export function defaultSettings(): AppSettings {
       envMapName: '',
       envMapType: 'ldr',
     },
-    background: { mode: 'checkerboard', color: '#0c2029', color2: '#123240', image: '', imageName: '' },
+    background: {
+      mode: 'checkerboard',
+      color: '#0c2029',
+      color2: '#123240',
+      image: '',
+      imageName: '',
+      imageScale: 1,
+      imageX: 0,
+      imageY: 0,
+    },
     animation: {
       preset: 'turntable',
       duration: 3,

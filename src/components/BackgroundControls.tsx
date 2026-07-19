@@ -1,6 +1,7 @@
 import { Select } from './common/Select'
 import { ColorField } from './common/ColorField'
 import { ImageField } from './common/ImageField'
+import { Slider } from './common/Slider'
 import { setSlice, store, useStore } from '../store/store'
 import { imageFileToDataUrl } from '../utils/file'
 
@@ -42,8 +43,19 @@ export function BackgroundControls() {
               }
             }}
             onClear={() => setSlice('background', { image: '', imageName: '' })} />
+          {b.image && (
+            <>
+              <Slider label="Zoom" value={b.imageScale} min={1} max={4} step={0.05} decimals={2}
+                unit="×" onChange={(v) => setSlice('background', { imageScale: v })} />
+              <Slider label="Horizontal" value={b.imageX} min={-1} max={1} step={0.01} decimals={2}
+                onChange={(v) => setSlice('background', { imageX: v })} />
+              <Slider label="Vertical" value={b.imageY} min={-1} max={1} step={0.01} decimals={2}
+                onChange={(v) => setSlice('background', { imageY: v })} />
+            </>
+          )}
           <p className="export-note">
-            The image is cover-cropped behind the object in the preview and in every export.
+            The image is cover-cropped behind the object in the preview and in every export — it
+            always fills the frame; zoom and position move it within the crop.
           </p>
         </>
       )}

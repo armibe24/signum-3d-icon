@@ -91,7 +91,14 @@ export function parsePreset(json: string): AppSettings {
         : d.icon
       : iconType === 'text'
         ? iconText && iconText.trim()
-          ? { type: 'text' as const, name: iconName.slice(0, 24), text: iconText, fontId: iconFont }
+          ? {
+              type: 'text' as const,
+              name: iconName.slice(0, 24),
+              text: iconText,
+              fontId: iconFont,
+              letterSpacing: num(icon.letterSpacing, 0, -0.5, 1),
+              textDetail: Math.round(num(icon.textDetail, 32, 4, 120)),
+            }
           : d.icon
         : knownIcon(iconName)
           ? { type: 'lucide' as const, name: iconName }
@@ -154,7 +161,7 @@ export function parsePreset(json: string): AppSettings {
       softShadows: bool(l.softShadows, d.lighting.softShadows),
       envMap: dataUrl(l.envMap),
       envMapName: shortStr(l.envMapName),
-      envMapType: str(l.envMapType, ['hdr', 'ldr'] as const, 'ldr'),
+      envMapType: str(l.envMapType, ['hdr', 'exr', 'ldr'] as const, 'ldr'),
     },
     background: {
       mode: str(
@@ -166,6 +173,9 @@ export function parsePreset(json: string): AppSettings {
       color2: color(b.color2, d.background.color2),
       image: dataUrl(b.image),
       imageName: shortStr(b.imageName),
+      imageScale: num(b.imageScale, d.background.imageScale, 1, 8),
+      imageX: num(b.imageX, d.background.imageX, -1, 1),
+      imageY: num(b.imageY, d.background.imageY, -1, 1),
     },
     animation: {
       preset: str(
