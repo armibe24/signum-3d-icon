@@ -7,7 +7,7 @@
 
 import type { AppSettings } from '../types'
 import { defaultSettings } from '../types'
-import { hasIcon } from '../icons/lucide'
+import { knownIcon } from '../icons/registry'
 import { MATERIAL_PRESETS } from '../engine/materials'
 
 export function serializePreset(settings: AppSettings): string {
@@ -29,6 +29,15 @@ function color(v: unknown, fallback: string): string {
 
 function bool(v: unknown, fallback: boolean): boolean {
   return typeof v === 'boolean' ? v : fallback
+}
+
+/** user-loaded images travel inside presets as data URLs */
+function dataUrl(v: unknown): string {
+  return typeof v === 'string' && v.startsWith('data:') && v.length <= 33_000_000 ? v : ''
+}
+
+function shortStr(v: unknown, max = 120): string {
+  return typeof v === 'string' ? v.slice(0, max) : ''
 }
 
 function vec3(v: unknown, fallback: { x: number; y: number; z: number }) {
@@ -65,17 +74,35 @@ export function parsePreset(json: string): AppSettings {
   const e = (raw.export ?? {}) as Record<string, unknown>
   const c = (raw.camera ?? {}) as Record<string, unknown>
 
-  const iconType = str(icon.type, ['lucide', 'custom'] as const, 'lucide')
+  const iconType = str(icon.type, ['lucide', 'custom', 'text'] as const, 'lucide')
   const iconName = typeof icon.name === 'string' && icon.name ? icon.name : d.icon.name
   const iconSvg = typeof icon.svg === 'string' ? icon.svg : undefined
+  const iconText = typeof icon.text === 'string' ? icon.text.slice(0, 200) : undefined
+  // bundled font ids, or "system:<postscript-name>" for installed fonts
+  const iconFont =
+    typeof icon.fontId === 'string' &&
+    /^(dm-sans|dm-sans-bold|jetbrains-mono|jetbrains-mono-bold|system:[\x20-\x7e]{1,120})$/.test(icon.fontId)
+      ? icon.fontId
+      : 'dm-sans'
   const validIcon =
     iconType === 'custom'
       ? iconSvg
         ? { type: 'custom' as const, name: iconName, svg: iconSvg }
         : d.icon
-      : hasIcon(iconName)
-        ? { type: 'lucide' as const, name: iconName }
-        : d.icon
+      : iconType === 'text'
+        ? iconText && iconText.trim()
+          ? {
+              type: 'text' as const,
+              name: iconName.slice(0, 24),
+              text: iconText,
+              fontId: iconFont,
+              letterSpacing: num(icon.letterSpacing, 0, -0.5, 1),
+              textDetail: Math.round(num(icon.textDetail, 32, 4, 120)),
+            }
+          : d.icon
+        : knownIcon(iconName)
+          ? { type: 'lucide' as const, name: iconName }
+          : d.icon
 
   const presetIds = [...MATERIAL_PRESETS.map((p) => p.id), 'custom']
 
@@ -89,8 +116,10 @@ export function parsePreset(json: string): AppSettings {
       strokeWidth: num(g.strokeWidth, d.geometry.strokeWidth, 0.2, 4),
       extrudeDepth: num(g.extrudeDepth, d.geometry.extrudeDepth, 1, 60),
       bevelAmount: num(g.bevelAmount, d.geometry.bevelAmount, 0, 10),
-      bevelSegments: Math.round(num(g.bevelSegments, d.geometry.bevelSegments, 1, 12)),
-      bevelStyle: str(g.bevelStyle, ['hard', 'rounded'] as const, d.geometry.bevelStyle),
+      bevelSegments: Math.round(num(g.bevelSegments, d.geometry.bevelSegments, 1, 8)),
+      bevelStyle: str(g.bevelStyle, ['none', 'hard', 'rounded'] as const, d.geometry.bevelStyle),
+      shading: str(g.shading, ['flat', 'smooth', 'angle'] as const, d.geometry.shading),
+      shadingAngle: num(g.shadingAngle, d.geometry.shadingAngle, 10, 180),
       combine: str(g.combine, ['union', 'separate'] as const, d.geometry.combine),
       quality: str(g.quality, ['fast', 'balanced', 'high'] as const, d.geometry.quality),
       normalizeSize: bool(g.normalizeSize, d.geometry.normalizeSize),
@@ -100,10 +129,14 @@ export function parsePreset(json: string): AppSettings {
       preset: str(m.preset, presetIds, 'custom'),
       mode: str(
         m.mode,
-        ['solid', 'clay', 'plastic', 'metal', 'chrome', 'soft-metal', 'glass', 'emissive'] as const,
+        ['solid', 'clay', 'plastic', 'metal', 'chrome', 'soft-metal', 'liquid', 'glass', 'emissive'] as const,
         d.material.mode,
       ),
       color: color(m.color, d.material.color),
+      // per-part overrides: keep valid hex entries, '' = follow base color
+      partColors: Array.isArray(m.partColors)
+        ? m.partColors.slice(0, 64).map((v) => (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v.toLowerCase() : ''))
+        : [],
       roughness: num(m.roughness, d.material.roughness, 0, 1),
       metalness: num(m.metalness, d.material.metalness, 0, 1),
       opacity: num(m.opacity, d.material.opacity, 0.05, 1),
@@ -111,6 +144,12 @@ export function parsePreset(json: string): AppSettings {
       emissiveIntensity: num(m.emissiveIntensity, d.material.emissiveIntensity, 0, 8),
       clearcoat: num(m.clearcoat, d.material.clearcoat, 0, 1),
       envIntensity: num(m.envIntensity, d.material.envIntensity, 0, 3),
+      textureMap: dataUrl(m.textureMap),
+      textureName: shortStr(m.textureName),
+      textureScale: num(m.textureScale, d.material.textureScale, 0.05, 20),
+      textureMapping: str(m.textureMapping, ['stretch', 'aspect', 'part'] as const, d.material.textureMapping),
+      liquidAmount: num(m.liquidAmount, d.material.liquidAmount, 0, 2),
+      liquidScale: num(m.liquidScale, d.material.liquidScale, 0.25, 10),
     },
     lighting: {
       preset: str(l.preset, ['studio', 'softbox', 'dramatic', 'top', 'custom'] as const, d.lighting.preset),
@@ -122,15 +161,33 @@ export function parsePreset(json: string): AppSettings {
       keyElevation: num(l.keyElevation, d.lighting.keyElevation, 5, 85),
       shadows: bool(l.shadows, d.lighting.shadows),
       softShadows: bool(l.softShadows, d.lighting.softShadows),
+      envPreset: str(
+        l.envPreset,
+        ['soft-studio', 'bright-product', 'dark-studio', 'high-contrast', 'light-strips', 'rim-light', 'custom'] as const,
+        d.lighting.envPreset,
+      ),
+      envRotation: num(l.envRotation, d.lighting.envRotation, 0, 360),
+      envIntensity: num(l.envIntensity, d.lighting.envIntensity, 0, 3),
+      reflectionContrast: num(l.reflectionContrast, d.lighting.reflectionContrast, 0.5, 2),
+      exposure: num(l.exposure, d.lighting.exposure, 0.25, 2.5),
+      backgroundBrightness: num(l.backgroundBrightness, d.lighting.backgroundBrightness, 0, 2),
+      envMap: dataUrl(l.envMap),
+      envMapName: shortStr(l.envMapName),
+      envMapType: str(l.envMapType, ['hdr', 'exr', 'ldr'] as const, 'ldr'),
     },
     background: {
       mode: str(
         b.mode,
-        ['transparent', 'checkerboard', 'solid', 'gradient', 'studio'] as const,
+        ['transparent', 'checkerboard', 'solid', 'gradient', 'studio', 'image'] as const,
         d.background.mode,
       ),
       color: color(b.color, d.background.color),
       color2: color(b.color2, d.background.color2),
+      image: dataUrl(b.image),
+      imageName: shortStr(b.imageName),
+      imageScale: num(b.imageScale, d.background.imageScale, 1, 8),
+      imageX: num(b.imageX, d.background.imageX, -1, 1),
+      imageY: num(b.imageY, d.background.imageY, -1, 1),
     },
     animation: {
       preset: str(
@@ -150,9 +207,11 @@ export function parsePreset(json: string): AppSettings {
     export: {
       stillFormat: str(e.stillFormat, ['png', 'jpg', 'webp'] as const, d.export.stillFormat),
       animFormat: str(e.animFormat, ['mp4', 'webm', 'gif', 'png-seq'] as const, d.export.animFormat),
+      modelFormat: str(e.modelFormat, ['glb', 'gltf', 'obj', 'stl'] as const, d.export.modelFormat),
       sizePreset: str(e.sizePreset, ['512', '1024', '2048', 'custom'] as const, d.export.sizePreset),
       width: Math.round(num(e.width, d.export.width, 16, 4096)),
       height: Math.round(num(e.height, d.export.height, 16, 4096)),
+      gifDither: bool(e.gifDither, d.export.gifDither),
     },
     camera: {
       position: [

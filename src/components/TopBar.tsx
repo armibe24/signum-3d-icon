@@ -1,80 +1,160 @@
+/* Top bar — Sonitus-style: brand on the left, then icon-only action
+   groups separated by divider lines, settings + about on the right.
+   Every button has a tooltip + aria-label since there are no text
+   labels.
+
+   Destructive/file actions run through the Sonitus dialog set:
+   - New Project  → ConfirmModal (always; with "Save preset first"
+     shortcut when there are unsaved changes)
+   - Load preset  → ConfirmModal only when there are unsaved changes
+   - Save preset  → NameModal (names the .json preset file)
+   All dialogs are custom in-app modals — never native windows. */
+
 import { useState } from 'react'
 import { store, useStore } from '../store/store'
-import { savePresetFile, loadPresetFile, resetProject } from './PresetControls'
+import { savePresetAs, defaultPresetName, loadPresetFile, resetProject } from './PresetControls'
 import { AboutModal } from './AboutModal'
+import { SettingsModal } from './SettingsModal'
+import { ConfirmModal } from './common/ConfirmModal'
+import { NameModal } from './common/NameModal'
+import { Icon } from './common/Icon'
+import { isDirty } from '../utils/dirty'
+import { Logo } from './common/Logo'
 
-function Logo() {
+interface Action {
+  icon: string
+  label: string
+  onClick: () => void
+  disabled?: boolean
+}
+
+function IconAction({ icon, label, onClick, disabled }: Action) {
   return (
-    <span className="topbar-logo">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-        <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-        <line x1="12" y1="22.08" x2="12" y2="12" />
-      </svg>
-    </span>
+    <button
+      type="button"
+      className="iconbtn"
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+    >
+      <Icon name={icon} size={14} strokeWidth={2} />
+    </button>
   )
 }
+
+type DialogState =
+  | null
+  | { kind: 'new' }
+  | { kind: 'load' }
+  /** save-preset dialog; `next` continues a pending action afterwards */
+  | { kind: 'save'; next?: () => void }
 
 export function TopBar() {
   const canUndo = useStore((s) => s.canUndo)
   const canRedo = useStore((s) => s.canRedo)
   const [showAbout, setShowAbout] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [dialog, setDialog] = useState<DialogState>(null)
 
   return (
     <header className="topbar">
       <div className="topbar-brand">
-        <Logo />
-        SIGNUM <span className="sub">3D ICON STUDIO</span>
+        <span className="topbar-logo">
+          <Logo size={20} />
+        </span>
+        SIGNUM
       </div>
 
       <div className="topbar-sep" />
       <div className="topbar-group">
-        <button type="button" className="topbtn" onClick={resetProject} title="New project — resets all settings">
-          New
-        </button>
-        <button type="button" className="iconbtn" disabled={!canUndo} onClick={() => store.undo()} title="Undo (Ctrl+Z)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 14 4 9l5-5" />
-            <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
-          </svg>
-        </button>
-        <button type="button" className="iconbtn" disabled={!canRedo} onClick={() => store.redo()} title="Redo (Ctrl+Shift+Z)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m15 14 5-5-5-5" />
-            <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />
-          </svg>
-        </button>
+        <IconAction icon="file-plus-2" label="New project (reset all)"
+          onClick={() => setDialog({ kind: 'new' })} />
+        <IconAction icon="folder-open" label="Load preset…"
+          onClick={() => (isDirty() ? setDialog({ kind: 'load' }) : void loadPresetFile())} />
       </div>
 
       <div className="topbar-sep" />
       <div className="topbar-group">
-        <button type="button" className="topbtn" onClick={savePresetFile} title="Save all settings as a JSON preset">
-          Save preset
-        </button>
-        <button type="button" className="topbtn" onClick={loadPresetFile} title="Load a JSON preset">
-          Load preset
-        </button>
+        <IconAction icon="save" label="Save preset" onClick={() => setDialog({ kind: 'save' })} />
+      </div>
+
+      <div className="topbar-sep" />
+      <div className="topbar-group">
+        <IconAction icon="undo-2" label="Undo (Ctrl+Z)" onClick={() => store.undo()} disabled={!canUndo} />
+        <IconAction icon="redo-2" label="Redo (Ctrl+Shift+Z)" onClick={() => store.redo()} disabled={!canRedo} />
       </div>
 
       <div className="topbar-spacer" />
 
-      <button
-        type="button"
-        className="topbtn topbtn--primary"
-        onClick={() => store.requestSection('export')}
-        title="Open export options"
-      >
-        Export
-      </button>
-      <button type="button" className="iconbtn" onClick={() => setShowAbout(true)} title="Shortcuts & info">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 16v-4" />
-          <path d="M12 8h.01" />
-        </svg>
-      </button>
+      <div className="topbar-group">
+        <IconAction icon="settings" label="Settings" onClick={() => setShowSettings(true)} />
+        <IconAction icon="info" label="About & shortcuts" onClick={() => setShowAbout(true)} />
+      </div>
 
       {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+
+      {dialog?.kind === 'new' && (
+        <ConfirmModal
+          title="New Project"
+          message={
+            <>
+              This resets everything to a clean default state: the icon, geometry, materials,
+              lighting, animation and camera.
+              {isDirty() && (
+                <>
+                  {' '}
+                  You have <b>unsaved changes</b> — save a preset first if you want to keep them.
+                </>
+              )}
+            </>
+          }
+          confirmLabel="Reset everything"
+          onConfirm={resetProject}
+          secondaryLabel={isDirty() ? 'Save preset first' : undefined}
+          onSecondary={isDirty() ? () => setDialog({ kind: 'save', next: resetProject }) : undefined}
+          onClose={() => setDialog((d) => (d?.kind === 'new' ? null : d))}
+        />
+      )}
+
+      {dialog?.kind === 'load' && (
+        <ConfirmModal
+          title="Load Preset"
+          message={
+            <>
+              Loading a preset replaces your current adjustments. You have <b>unsaved changes</b> —
+              save a preset first if you want to keep them.
+            </>
+          }
+          confirmLabel="Load preset"
+          onConfirm={() => void loadPresetFile()}
+          secondaryLabel="Save preset first"
+          onSecondary={() => setDialog({ kind: 'save', next: () => void loadPresetFile() })}
+          onClose={() => setDialog((d) => (d?.kind === 'load' ? null : d))}
+        />
+      )}
+
+      {dialog?.kind === 'save' && (
+        <NameModal
+          title="Save Preset"
+          note={
+            <>
+              Name your preset. It is saved as a <b>.json</b> file containing the full project
+              state and can be loaded back anytime.
+            </>
+          }
+          ctaLabel="Save Preset"
+          placeholder={defaultPresetName()}
+          initial={defaultPresetName()}
+          onSave={(name) => {
+            const next = dialog.next
+            savePresetAs(name)
+            next?.()
+          }}
+          onClose={() => setDialog(null)}
+        />
+      )}
     </header>
   )
 }

@@ -5,16 +5,35 @@
    what undo history snapshots and JSON presets serialize.
    ============================================================ */
 
+/** bundled font id, or `system:<postscript-name>` for a font installed on
+    the user's machine (Local Font Access API) */
+export type TextFontId = string
+export type BundledFontId = 'dm-sans' | 'dm-sans-bold' | 'jetbrains-mono' | 'jetbrains-mono-bold'
+
 export interface IconSource {
-  type: 'lucide' | 'custom'
-  /** lucide icon id (kebab-case) or imported file name */
+  type: 'lucide' | 'custom' | 'text'
+  /** lucide icon id (kebab-case), imported file name, or text label */
   name: string
   /** raw SVG markup for custom imports */
   svg?: string
+  /** the text to extrude (type 'text') */
+  text?: string
+  /** bundled local font for text (type 'text') */
+  fontId?: TextFontId
+  /** additional character spacing, in em (type 'text'); 0 = font default */
+  letterSpacing?: number
+  /** curve sampling quality for glyph outlines (type 'text'); higher =
+      smoother curves, more polygons */
+  textDetail?: number
 }
 
+/** default curve divisions for 3D text (smoother than icon 'balanced') */
+export const DEFAULT_TEXT_DETAIL = 32
+export const MAX_TEXT_DETAIL = 80
+
 export type GeometryQuality = 'fast' | 'balanced' | 'high'
-export type BevelStyle = 'hard' | 'rounded'
+export type BevelStyle = 'none' | 'hard' | 'rounded'
+export type ShadingMode = 'flat' | 'smooth' | 'angle'
 export type ShapeCombine = 'union' | 'separate'
 
 export interface GeometrySettings {
@@ -25,6 +44,10 @@ export interface GeometrySettings {
   bevelAmount: number
   bevelSegments: number
   bevelStyle: BevelStyle
+  /** normal smoothing: flat faces, all-smooth, or smooth below an angle */
+  shading: ShadingMode
+  /** crease threshold for 'angle' shading, degrees */
+  shadingAngle: number
   /** union everything into one solid vs. keep elements as grouped parts */
   combine: ShapeCombine
   quality: GeometryQuality
@@ -41,6 +64,7 @@ export type MaterialMode =
   | 'metal'
   | 'chrome'
   | 'soft-metal'
+  | 'liquid'
   | 'glass'
   | 'emissive'
 
@@ -49,6 +73,9 @@ export interface MaterialSettings {
   preset: string
   mode: MaterialMode
   color: string
+  /** per-part color overrides, indexed by disconnected-part (largest part
+      first); missing or empty ('') entries fall back to `color` */
+  partColors: string[]
   roughness: number
   metalness: number
   opacity: number
@@ -56,9 +83,34 @@ export interface MaterialSettings {
   emissiveIntensity: number
   clearcoat: number
   envIntensity: number
+  /** image used as the color texture of the object (data URL); multiplies
+      with the base color, so white areas show the color unchanged */
+  textureMap: string
+  textureName: string
+  /** tiling: 1 = the image spans the icon once, 2 = tiled twice, … */
+  textureScale: number
+  /** UV placement: stretch across the icon bbox, keep the image aspect
+      (squares stay square), or give every disconnected part its own 0..1 */
+  textureMapping: TextureMapping
+  /** liquid-metal mode: static surface distortion strength (normal map) */
+  liquidAmount: number
+  /** liquid-metal mode: distortion feature scale (tiling of the noise) */
+  liquidScale: number
 }
 
+export type TextureMapping = 'stretch' | 'aspect' | 'part'
+
 export type LightingPresetId = 'studio' | 'softbox' | 'dramatic' | 'top' | 'custom'
+
+/** bundled procedural studio HDRI environments + user file import */
+export type EnvPresetId =
+  | 'soft-studio'
+  | 'bright-product'
+  | 'dark-studio'
+  | 'high-contrast'
+  | 'light-strips'
+  | 'rim-light'
+  | 'custom'
 
 export interface LightingSettings {
   preset: LightingPresetId
@@ -71,15 +123,41 @@ export interface LightingSettings {
   keyElevation: number
   shadows: boolean
   softShadows: boolean
+  /** bundled studio environment (procedural HDRI) or 'custom' for a file */
+  envPreset: EnvPresetId
+  /** environment rotation around the vertical axis, degrees */
+  envRotation: number
+  /** scene-level environment (reflection/IBL) intensity */
+  envIntensity: number
+  /** contrast curve applied to the bundled environments (1 = neutral) */
+  reflectionContrast: number
+  /** tone-mapping exposure (viewport AND exports) */
+  exposure: number
+  /** multiplier on the backdrop only — separates object from background */
+  backgroundBrightness: number
+  /** custom image-based lighting: equirectangular .hdr/.exr or LDR image
+      as a data URL; used when envPreset === 'custom' */
+  envMap: string
+  envMapName: string
+  /** 'hdr' = Radiance RGBE, 'exr' = OpenEXR, 'ldr' = plain image */
+  envMapType: 'hdr' | 'exr' | 'ldr'
 }
 
-export type BackgroundMode = 'transparent' | 'checkerboard' | 'solid' | 'gradient' | 'studio'
+export type BackgroundMode = 'transparent' | 'checkerboard' | 'solid' | 'gradient' | 'studio' | 'image'
 
 export interface BackgroundSettings {
   mode: BackgroundMode
   color: string
   /** second stop for gradient mode */
   color2: string
+  /** user-loaded backdrop for 'image' mode (data URL, cover-cropped) */
+  image: string
+  imageName: string
+  /** backdrop zoom: 1 = exact cover fit, >1 zooms into the image */
+  imageScale: number
+  /** backdrop pan within the croppable range, -1..1 per axis */
+  imageX: number
+  imageY: number
 }
 
 export type AnimationPresetId =
@@ -118,14 +196,19 @@ export interface AnimationSettings {
 
 export type StillFormat = 'png' | 'jpg' | 'webp'
 export type AnimFormat = 'mp4' | 'webm' | 'gif' | 'png-seq'
+export type ModelFormat = 'glb' | 'gltf' | 'obj' | 'stl'
 export type SizePresetId = '512' | '1024' | '2048' | 'custom'
 
 export interface ExportSettings {
   stillFormat: StillFormat
   animFormat: AnimFormat
+  /** 3D model export format (GLB recommended) */
+  modelFormat: ModelFormat
   sizePreset: SizePresetId
   width: number
   height: number
+  /** GIF only: ordered dithering to smooth the ≤256-color banding */
+  gifDither: boolean
 }
 
 export interface CameraState {
@@ -166,6 +249,8 @@ export function defaultSettings(): AppSettings {
       bevelAmount: 2.4,
       bevelSegments: 4,
       bevelStyle: 'rounded',
+      shading: 'angle',
+      shadingAngle: 45,
       combine: 'union',
       quality: 'balanced',
       normalizeSize: true,
@@ -175,6 +260,7 @@ export function defaultSettings(): AppSettings {
       preset: 'soft-plastic',
       mode: 'plastic',
       color: '#5fc6e8',
+      partColors: [],
       roughness: 0.28,
       metalness: 0,
       opacity: 1,
@@ -182,6 +268,12 @@ export function defaultSettings(): AppSettings {
       emissiveIntensity: 0,
       clearcoat: 0.6,
       envIntensity: 1,
+      textureMap: '',
+      textureName: '',
+      textureScale: 1,
+      textureMapping: 'stretch',
+      liquidAmount: 0.65,
+      liquidScale: 1.4,
     },
     lighting: {
       preset: 'studio',
@@ -191,10 +283,29 @@ export function defaultSettings(): AppSettings {
       rim: 1.6,
       keyAzimuth: 35,
       keyElevation: 45,
-      shadows: true,
+      // performance-friendly defaults: shadows are opt-in
+      shadows: false,
       softShadows: true,
+      envPreset: 'soft-studio',
+      envRotation: 0,
+      envIntensity: 1,
+      reflectionContrast: 1,
+      exposure: 1,
+      backgroundBrightness: 1,
+      envMap: '',
+      envMapName: '',
+      envMapType: 'ldr',
     },
-    background: { mode: 'checkerboard', color: '#0c2029', color2: '#123240' },
+    background: {
+      mode: 'checkerboard',
+      color: '#0c2029',
+      color2: '#123240',
+      image: '',
+      imageName: '',
+      imageScale: 1,
+      imageX: 0,
+      imageY: 0,
+    },
     animation: {
       preset: 'turntable',
       duration: 3,
@@ -209,9 +320,11 @@ export function defaultSettings(): AppSettings {
     export: {
       stillFormat: 'png',
       animFormat: 'png-seq',
+      modelFormat: 'glb',
       sizePreset: '1024',
       width: 1024,
       height: 1024,
+      gifDither: false,
     },
     camera: { ...DEFAULT_CAMERA },
   }
@@ -229,12 +342,3 @@ export type Ring = Pair[]
 export type PolygonWithHoles = Ring[]
 export type MultiPolygon = PolygonWithHoles[]
 
-/** One independently-extruded piece of the icon */
-export interface GeometryPart {
-  polygons: MultiPolygon
-}
-
-export interface ProcessedIcon {
-  parts: GeometryPart[]
-  warnings: string[]
-}

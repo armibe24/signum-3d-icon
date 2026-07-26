@@ -2,6 +2,7 @@
    outside click / Escape; keyboard accessible via the trigger. */
 
 import { useEffect, useRef, useState } from 'react'
+import { Icon } from './Icon'
 
 export interface SelectOption<T extends string> {
   value: T
@@ -47,9 +48,7 @@ export function Select<T extends string>({ label, value, options, disabled, onCh
         disabled={disabled}
       >
         <span className="select-value">{current?.label ?? value}</span>
-        <svg className="select-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none">
-          <path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        </svg>
+        <Icon className="select-chevron" name="chevron-down" size={11} strokeWidth={2.4} />
       </button>
       {open && (
         <div className="select-menu">
@@ -64,11 +63,7 @@ export function Select<T extends string>({ label, value, options, disabled, onCh
               }}
             >
               <span>{o.label}</span>
-              {o.value === value && (
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <path d="M1.5 5.5 4 8l4.5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-              )}
+              {o.value === value && <Icon name="check" size={11} strokeWidth={2.6} />}
             </button>
           ))}
         </div>

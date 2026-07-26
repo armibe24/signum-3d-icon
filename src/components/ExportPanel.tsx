@@ -1,15 +1,25 @@
 import { Select } from './common/Select'
 import { NumField } from './common/NumField'
+import { Toggle } from './common/Toggle'
+import { Icon } from './common/Icon'
 import { setSlice, useStore } from '../store/store'
 import { exportAnimation, exportStill } from '../utils/export/exporter'
+import { exportModel } from '../utils/export/model'
 import { store } from '../store/store'
 import type { SizePresetId } from '../types'
+
+const MODEL_NOTES: Record<string, string> = {
+  glb: 'GLB (recommended) — geometry, PBR materials and textures in one file.',
+  gltf: 'glTF — single .gltf file with embedded buffers and textures.',
+  obj: 'OBJ + MTL — packaged as ZIP; colors, roughness and color texture only.',
+  stl: 'STL — geometry only (the format cannot store materials).',
+}
 
 const SIZE_MAP: Record<Exclude<SizePresetId, 'custom'>, number> = { '512': 512, '1024': 1024, '2048': 2048 }
 
 const FORMAT_NOTES: Record<string, string> = {
   'png-seq': 'PNG sequence (ZIP) — full 8-bit transparency, most reliable.',
-  gif: 'GIF — 1-bit transparency (hard pixel edges), colors quantized to 256.',
+  gif: 'GIF — 1-bit transparency (hard pixel edges), colors quantized to 256. Dithering smooths gradient banding with a fine, frame-stable pixel pattern.',
   mp4: 'MP4 (H.264 via WebCodecs) — no alpha; transparent backgrounds are baked over the studio backdrop.',
   webm: 'WebM (VP9) — no alpha in Chrome’s encoder; transparent backgrounds are baked over the studio backdrop.',
 }
@@ -62,6 +72,10 @@ export function ExportPanel() {
           { value: 'webm', label: 'WebM (VP9)' },
         ]}
         onChange={(v) => setSlice('export', { animFormat: v })} />
+      {ex.animFormat === 'gif' && (
+        <Toggle label="Dithering" checked={ex.gifDither}
+          onChange={(v) => setSlice('export', { gifDither: v })} />
+      )}
       <p className="export-note">{FORMAT_NOTES[ex.animFormat]}</p>
       <p className="export-note">
         MOV with alpha is not possible with browser-only encoders — use the PNG sequence and convert
@@ -76,9 +90,7 @@ export function ExportPanel() {
               {job.label} {Math.round(job.progress * 100)}%
             </span>
             <button type="button" className="iconbtn" title="Cancel export" onClick={job.cancel}>
-              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                <path d="M2 2l8 8M10 2l-8 8" />
-              </svg>
+              <Icon name="x" size={12} strokeWidth={2.2} />
             </button>
           </div>
           <div className="progress-track">
@@ -87,16 +99,33 @@ export function ExportPanel() {
         </div>
       ) : (
         <div className="export-btns">
-          <button type="button" className="btn btn--sm btn--teal"
+          <button type="button" className="btn btn--sm"
             onClick={() => exportStill(store.get().settings).catch((e) => store.toast(String(e), 'error'))}>
-            Export still
+            <Icon name="image-down" size={12} strokeWidth={2.2} />
+            Still
           </button>
-          <button type="button" className="btn btn--sm btn--cyan"
+          <button type="button" className="btn btn--sm"
             onClick={() => exportAnimation(store.get().settings)}>
-            Export animation
+            <Icon name="clapperboard" size={12} strokeWidth={2.2} />
+            Animation
           </button>
         </div>
       )}
+
+      <Select label="3D model format" value={ex.modelFormat}
+        options={[
+          { value: 'glb', label: 'GLB (recommended)' },
+          { value: 'gltf', label: 'glTF (embedded)' },
+          { value: 'obj', label: 'OBJ + MTL (ZIP)' },
+          { value: 'stl', label: 'STL — geometry only' },
+        ]}
+        onChange={(v) => setSlice('export', { modelFormat: v })} />
+      <p className="export-note">{MODEL_NOTES[ex.modelFormat]}</p>
+      <button type="button" className="btn btn--sm" style={{ justifyContent: 'center' }}
+        onClick={() => void exportModel(store.get().settings.export.modelFormat)}>
+        <Icon name="box" size={12} strokeWidth={2.2} />
+        Export 3D model
+      </button>
     </div>
   )
 }

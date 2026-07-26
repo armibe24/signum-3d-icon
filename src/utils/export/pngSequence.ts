@@ -10,13 +10,16 @@ import type { AnimationEncoder } from './exporter'
 import type { ExportRenderer } from './renderer'
 
 export function createPngSequenceCollector(): AnimationEncoder {
-  const files: Record<string, Uint8Array> = {}
+  let files: Record<string, Uint8Array> = {}
 
   return {
     async addFrame(ex: ExportRenderer, index: number) {
       const blob = await ex.toBlob('image/png')
       const name = `frame_${String(index + 1).padStart(4, '0')}.png`
       files[name] = new Uint8Array(await blob.arrayBuffer())
+    },
+    abort() {
+      files = {} // drop the retained frames so GC can reclaim them now
     },
     finish() {
       return new Promise<{ blob: Blob; extension: string }>((resolve, reject) => {

@@ -19,18 +19,46 @@ import { sceneManager } from './engine/SceneManager'
 import { geometryBuilder } from './geometry/build'
 import { store } from './store/store'
 import { normalizePlayTime } from './engine/animation'
+import { restoreSession, startSessionAutosave } from './utils/session'
+import { isDirty, markClean } from './utils/dirty'
+import { ConfirmModal } from './components/common/ConfirmModal'
+import { useStore } from './store/store'
 
 let wired = false
+/** set right before an intentional close so beforeunload lets it through */
+const allowClose = { current: false }
 
 /** one-time store→engine wiring (module-level so StrictMode double-mount is safe) */
 function wireEngine() {
   if (wired) return
   wired = true
 
+  // bring back the last session BEFORE the first build, so a crash or
+  // reload never costs the user their adjustments
+  restoreSession()
+  startSessionAutosave()
+  markClean() // the restored (or fresh) state is the unsaved-changes baseline
+
+  // close warning — the Sonitus flow: beforeunload blocks the close while
+  // dirty; in the Electron shell that block is silent, so the renderer
+  // shows its own themed Close Window dialog (never a native window).
+  // Confirming sets allowClose and re-issues window.close().
+  window.addEventListener('beforeunload', (e) => {
+    if (allowClose.current || !isDirty()) return
+    e.preventDefault()
+    e.returnValue = ''
+    if (window.signumShell?.isElectron) store.setTransient({ closeRequested: true })
+  })
+
   geometryBuilder.onGeometry(({ geometry }) => {
     sceneManager.setGeometry(geometry)
   })
   geometryBuilder.start()
+
+  sceneManager.onZoomChange = (pct) => {
+    if (store.get().zoomPct !== pct) store.setTransient({ zoomPct: pct })
+  }
+  sceneManager.onEnvError = (msg) => store.toast(msg, 'error')
 
   // apply non-geometry settings imperatively whenever their slice changes
   let prev = store.get().settings
@@ -39,6 +67,7 @@ function wireEngine() {
     sceneManager.applyLighting(s.lighting)
     sceneManager.applyBackground(s.background)
     sceneManager.setUserScale(s.geometry.scale)
+    sceneManager.setExportAspect(s.export.width / Math.max(s.export.height, 1))
   }
   applyAll()
   store.subscribe(() => {
@@ -48,6 +77,8 @@ function wireEngine() {
     if (s.lighting !== prev.lighting) sceneManager.applyLighting(s.lighting)
     if (s.background !== prev.background) sceneManager.applyBackground(s.background)
     if (s.geometry.scale !== prev.geometry.scale) sceneManager.setUserScale(s.geometry.scale)
+    if (s.export !== prev.export)
+      sceneManager.setExportAspect(s.export.width / Math.max(s.export.height, 1))
     prev = s
   })
 
@@ -69,10 +100,21 @@ function wireEngine() {
   }
 }
 
+/**
+ * True only for elements where typing/shortcut keys belong to the element
+ * itself. Range sliders, checkboxes and buttons are NOT typing targets —
+ * they keep focus after a click, and undo must still work then.
+ */
 function isTypingTarget(el: EventTarget | null): boolean {
   if (!(el instanceof HTMLElement)) return false
+  if (el.isContentEditable) return true
   const tag = el.tagName
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable
+  if (tag === 'TEXTAREA' || tag === 'SELECT') return true
+  if (tag === 'INPUT') {
+    const type = (el as HTMLInputElement).type
+    return !['range', 'checkbox', 'radio', 'button', 'submit', 'reset'].includes(type)
+  }
+  return false
 }
 
 export default function App() {
@@ -102,6 +144,8 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  const closeRequested = useStore((s) => s.closeRequested)
+
   return (
     <div className="app">
       <TopBar />
@@ -111,6 +155,23 @@ export default function App() {
       </div>
       <Timeline />
       <Toast />
+      {closeRequested && (
+        <ConfirmModal
+          title="Close Window"
+          message={
+            <>
+              You have <b>unsaved changes</b>. They are kept by the session autosave and restored
+              on the next launch, but they are not saved as a preset file.
+            </>
+          }
+          confirmLabel="Close anyway"
+          onConfirm={() => {
+            allowClose.current = true
+            window.close()
+          }}
+          onClose={() => store.setTransient({ closeRequested: false })}
+        />
+      )}
     </div>
   )
 }

@@ -1,6 +1,9 @@
 import { Select } from './common/Select'
 import { ColorField } from './common/ColorField'
-import { setSlice, useStore } from '../store/store'
+import { ImageField } from './common/ImageField'
+import { Slider } from './common/Slider'
+import { setSlice, store, useStore } from '../store/store'
+import { imageFileToDataUrl } from '../utils/file'
 
 export function BackgroundControls() {
   const b = useStore((s) => s.settings.background)
@@ -14,6 +17,7 @@ export function BackgroundControls() {
           { value: 'solid', label: 'Solid color' },
           { value: 'gradient', label: 'Gradient' },
           { value: 'studio', label: 'Studio backdrop' },
+          { value: 'image', label: 'Image' },
         ]}
         onChange={(v) => setSlice('background', { mode: v })} />
 
@@ -24,6 +28,32 @@ export function BackgroundControls() {
       {b.mode === 'gradient' && (
         <ColorField label="Bottom color" value={b.color2}
           onChange={(c) => setSlice('background', { color2: c })} />
+      )}
+
+      {b.mode === 'image' && (
+        <>
+          <ImageField label="Backdrop image" value={b.image} name={b.imageName}
+            accept="image/png,image/jpeg,image/webp" buttonText="Load image…"
+            onPick={async (file) => {
+              try {
+                const image = await imageFileToDataUrl(file)
+                setSlice('background', { image, imageName: file.name })
+              } catch (e) {
+                store.toast(e instanceof Error ? e.message : 'Could not load the image.', 'error')
+              }
+            }}
+            onClear={() => setSlice('background', { image: '', imageName: '' })} />
+          {b.image && (
+            <>
+              <Slider label="Zoom" value={b.imageScale} min={1} max={4} step={0.05} decimals={2}
+                unit="×" onChange={(v) => setSlice('background', { imageScale: v })} />
+              <Slider label="Horizontal" value={b.imageX} min={-1} max={1} step={0.01} decimals={2}
+                onChange={(v) => setSlice('background', { imageX: v })} />
+              <Slider label="Vertical" value={b.imageY} min={-1} max={1} step={0.01} decimals={2}
+                onChange={(v) => setSlice('background', { imageY: v })} />
+            </>
+          )}
+        </>
       )}
 
       <p className="export-note">

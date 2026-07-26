@@ -2,24 +2,29 @@
    Geometry orchestrator — watches icon + geometry settings and
    drives the pipeline:
 
-     svg text ──parse (main)──► worker (outline+boolean+normalize)
-              ──extrude (main)──► engine.setGeometry()
+     svg text ──parse (main)──► worker 'process' (outline+boolean+
+     normalize) ──► extrude + bevel + shading (main, ExtrudeGeometry
+     per the SVG Extruder reference) ──► engine.setGeometry()
 
    - debounced so slider drags rebuild at most every 120 ms
    - every run gets an id; stale worker replies are dropped
-   - results cached at both stages (see geometry/cache.ts)
+   - two cache layers: processed 2D polygons (independent of
+     bevel/shading) and final geometry (full key)
    - only geometry-affecting settings trigger a rebuild; material
-     / light / camera changes never reach this module
+     / light / camera changes never reach this module. Shading
+     changes reuse the polygon caches and only re-run the cheap
+     assembly + normals stage.
    ============================================================ */
 
 import type * as THREE from 'three'
 import { store } from '../store/store'
-import type { AppSettings, MultiPolygon } from '../types'
+import { DEFAULT_TEXT_DETAIL, type AppSettings, type MultiPolygon } from '../types'
 import { parseSvg } from '../svg/parse'
 import type { SvgWorkerRequest, SvgWorkerResponse } from '../svg/types'
-import { extrudeParts } from './extrude'
+import { assembleIconGeometry, geometryLooksValid } from './mesh'
 import { geometryCache, polygonCache } from './cache'
-import { lucideSvg } from '../icons/lucide'
+import { resolveIconSvg } from '../icons/registry'
+import { textToSvg } from '../text/textToSvg'
 
 export interface BuildResult {
   geometry: THREE.BufferGeometry
@@ -30,19 +35,24 @@ type Listener = (result: BuildResult) => void
 
 const DEBOUNCE_MS = 120
 
-/** Settings that require re-running the worker stage */
+/** Settings that require re-running the worker 'process' stage */
 function polygonKey(s: AppSettings): string {
   const g = s.geometry
-  const iconKey = s.icon.type === 'lucide' ? `l:${s.icon.name}` : `c:${hashString(s.icon.svg ?? '')}`
+  const iconKey =
+    s.icon.type === 'lucide'
+      ? `l:${s.icon.name}`
+      : s.icon.type === 'text'
+        ? `t:${s.icon.fontId ?? 'dm-sans'}:${hashString(s.icon.text ?? '')}:${s.icon.letterSpacing ?? 0}:${s.icon.textDetail ?? DEFAULT_TEXT_DETAIL}`
+        : `c:${hashString(s.icon.svg ?? '')}`
   return JSON.stringify([iconKey, g.strokeWidth, g.combine, g.quality, g.normalizeSize])
 }
 
-/** Settings that require re-extruding (superset of polygonKey) */
+/** Full geometry identity (worker 'bevel' + assembly + shading) */
 function geometryKey(s: AppSettings): string {
   const g = s.geometry
   return (
     polygonKey(s) +
-    JSON.stringify([g.extrudeDepth, g.bevelAmount, g.bevelSegments, g.bevelStyle])
+    JSON.stringify([g.extrudeDepth, g.bevelAmount, g.bevelSegments, g.bevelStyle, g.shading, g.shadingAngle])
   )
 }
 
@@ -55,10 +65,12 @@ function hashString(str: string): string {
 class GeometryBuilder {
   private worker: Worker
   private runId = 0
+  private msgId = 0
   private timer: number | null = null
   private lastKey = ''
   private listener: Listener | null = null
   private pending = new Map<number, (r: SvgWorkerResponse) => void>()
+  private currentGeoKey = ''
 
   constructor() {
     this.worker = new Worker(new URL('../workers/svgWorker.ts', import.meta.url), {
@@ -93,6 +105,7 @@ class GeometryBuilder {
   private async rebuild() {
     const id = ++this.runId
     const settings = store.get().settings
+    const g = settings.geometry
     const pKey = polygonKey(settings)
     const gKey = geometryKey(settings)
 
@@ -106,22 +119,32 @@ class GeometryBuilder {
 
     store.setTransient({ processing: true })
     try {
+      // ---- stage 1: processed 2D solid (cached across bevel/shading) --
       let parts: MultiPolygon[]
       let warnings: string[]
 
       const cachedPolys = polygonCache.get(pKey)
       if (cachedPolys) {
         parts = cachedPolys.parts
-        warnings = cachedPolys.warnings
+        warnings = [...cachedPolys.warnings]
       } else {
-        const svgText = this.resolveSvg(settings)
-        const parsed = parseSvg(svgText, settings.geometry.quality, settings.geometry.strokeWidth)
-        const response = await this.runWorker({
-          id,
+        const svgText = await this.resolveSvg(settings)
+        if (id !== this.runId) return
+        const parsed = parseSvg(
+          svgText,
+          g.quality,
+          g.strokeWidth,
+          // 3D text has its own curve-quality control (glyph outlines are
+          // curve-heavy; the icon quality presets sample them too coarsely)
+          settings.icon.type === 'text' ? (settings.icon.textDetail ?? DEFAULT_TEXT_DETAIL) : undefined,
+        )
+        const response = await this.request({
+          op: 'process',
+          id: ++this.msgId,
           parsed,
-          combine: settings.geometry.combine,
-          quality: settings.geometry.quality,
-          normalizeSize: settings.geometry.normalizeSize,
+          combine: g.combine,
+          quality: g.quality,
+          normalizeSize: g.normalizeSize,
         })
         if (id !== this.runId) return // superseded while waiting
         if (response.error) throw new Error(response.error)
@@ -130,10 +153,20 @@ class GeometryBuilder {
         polygonCache.set(pKey, { parts, warnings })
       }
 
+      // ---- stage 2: extrude + bevel + shading (main thread) -----------
       if (id !== this.runId) return
-      const geometry = extrudeParts(parts, settings.geometry)
-      geometryCache.set(gKey, { geometry, inUse: true })
-      this.deliver(geometry, warnings, gKey)
+      const assembled = assembleIconGeometry(parts, g)
+      warnings = [...warnings, ...assembled.warnings]
+
+      if (!geometryLooksValid(assembled.geometry)) {
+        warnings = [...warnings, 'This icon produced invalid 3D geometry — keeping the previous mesh.']
+        assembled.geometry.dispose()
+        store.setTransient({ processing: false, warnings })
+        store.toast(warnings[warnings.length - 1], 'error')
+        return
+      }
+      geometryCache.set(gKey, { geometry: assembled.geometry, inUse: true })
+      this.deliver(assembled.geometry, warnings, gKey)
     } catch (e) {
       if (id !== this.runId) return
       store.setTransient({ processing: false })
@@ -141,24 +174,25 @@ class GeometryBuilder {
     }
   }
 
-  private resolveSvg(settings: AppSettings): string {
+  private async resolveSvg(settings: AppSettings): Promise<string> {
     if (settings.icon.type === 'custom') {
       if (!settings.icon.svg) throw new Error('Custom icon has no SVG data.')
       return settings.icon.svg
     }
-    const svg = lucideSvg(settings.icon.name, '#000')
-    if (!svg) throw new Error(`Unknown lucide icon "${settings.icon.name}".`)
+    if (settings.icon.type === 'text') {
+      return textToSvg(settings.icon.text ?? '', settings.icon.fontId ?? 'dm-sans', settings.icon.letterSpacing ?? 0)
+    }
+    const svg = await resolveIconSvg(settings.icon.name, '#000')
+    if (!svg) throw new Error(`Unknown icon "${settings.icon.name}".`)
     return svg
   }
 
-  private runWorker(req: SvgWorkerRequest): Promise<SvgWorkerResponse> {
+  private request(req: SvgWorkerRequest): Promise<SvgWorkerResponse> {
     return new Promise((resolve) => {
       this.pending.set(req.id, resolve)
       this.worker.postMessage(req)
     })
   }
-
-  private currentGeoKey = ''
 
   private deliver(geometry: THREE.BufferGeometry, warnings: string[], gKey: string) {
     // release the in-use pin of the previous geometry so the LRU may dispose it
@@ -167,7 +201,8 @@ class GeometryBuilder {
       if (prev) prev.inUse = false
     }
     this.currentGeoKey = gKey
-    store.setTransient({ processing: false, warnings })
+    const partCount = Math.max(Number(geometry.userData.partCount) || 1, 1)
+    store.setTransient({ processing: false, warnings, partCount })
     if (warnings.length) {
       store.toast(warnings[0], 'info')
     }

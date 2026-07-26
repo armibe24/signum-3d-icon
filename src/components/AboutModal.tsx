@@ -1,44 +1,117 @@
+import { Modal } from './common/Modal'
+import { Logo } from './common/Logo'
+import pkg from '../../package.json'
+import confiniumRaw from '../../branding/confinium_logo.svg?raw'
+
+const confiniumSvg = confiniumRaw
+  .replace(/fill="#fff"/gi, 'fill="currentColor"')
+  .replace(/width="[^"]*"\s+height="[^"]*"/, 'width="100%" height="100%"')
+
+/* Structure mirrors the Sonitus About modal: app header with logo +
+   version, app license, third-party libraries / icons / fonts with
+   their licenses, then the practical reference tables. */
+
+const LIBRARIES: [name: string, license: string, usedFor: string][] = [
+  ['react / react-dom', 'MIT', 'user interface'],
+  ['three', 'MIT', '3D engine & rendering'],
+  ['polygon-clipping', 'MIT', 'outline boolean union'],
+  ['opentype.js', 'MIT', 'font glyph outlines'],
+  ['gifenc', 'MIT', 'GIF encoding'],
+  ['mediabunny', 'MPL-2.0', 'MP4 / WebM export'],
+  ['fflate', 'MIT', 'PNG-sequence ZIP'],
+  ['vite', 'MIT', 'build tooling'],
+  ['typescript', 'Apache-2.0', 'build tooling'],
+]
+
+const ICON_SETS: [name: string, license: string][] = [
+  ['Lucide', 'ISC'],
+  ['Tabler Icons', 'MIT'],
+  ['Phosphor Icons', 'MIT'],
+  ['Remix Icon', 'Apache-2.0'],
+]
+
 export function AboutModal({ onClose }: { onClose: () => void }) {
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <h2>Signum — 3D Icon Studio</h2>
-          <button type="button" className="iconbtn" onClick={onClose} title="Close">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-              <path d="M2 2l8 8M10 2l-8 8" />
-            </svg>
-          </button>
+    <Modal title="About" onClose={onClose}>
+      <div className="about-head">
+        <Logo className="about-logo" size={44} />
+        <div>
+          <h3 className="about-name">Signum — 3D Icon Studio</h3>
+          <p className="about-version">Version {pkg.version}</p>
         </div>
-        <div className="modal-body">
+      </div>
+          <p className="modal-note">
+            A professional 3D icon studio. Convert stroke icons, SVGs and text into solid 3D forms,
+            adjust geometry, materials, lighting and motion, then export stills or animations. All
+            processing runs locally — no uploads, no external services.
+          </p>
+
+          <p className="modal-subhead">App license</p>
+          <p className="modal-note">© {new Date().getFullYear()} Signum. All rights reserved.</p>
+
+          <p className="modal-subhead">Third-party libraries</p>
+          <table className="about-table">
+            <thead>
+              <tr><th>Library</th><th>License</th><th>Used for</th></tr>
+            </thead>
+            <tbody>
+              {LIBRARIES.map(([name, license, usedFor]) => (
+                <tr key={name}><td>{name}</td><td>{license}</td><td>{usedFor}</td></tr>
+              ))}
+            </tbody>
+          </table>
+
+          <p className="modal-subhead">Icons</p>
+          <table className="about-table">
+            <thead>
+              <tr><th>Icon set</th><th>License</th></tr>
+            </thead>
+            <tbody>
+              {ICON_SETS.map(([name, license]) => (
+                <tr key={name}><td>{name}</td><td>{license}</td></tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="modal-note">
+            All icon sets are bundled locally; their license texts ship with the app
+            (<code>src/icons/data/</code>). UI icons come from the bundled Lucide data.
+          </p>
+
+          <p className="modal-subhead">Fonts</p>
+          <p className="modal-note">
+            DM Sans and JetBrains Mono — SIL Open Font License 1.1, bundled locally with their
+            license texts. 3D text can additionally use fonts installed on this machine (they are
+            never uploaded or redistributed).
+          </p>
+
           <p className="modal-subhead">Keyboard shortcuts</p>
           <table className="about-table">
             <tbody>
-              <tr><td>Undo / Redo</td><td>Ctrl+Z · Ctrl+Shift+Z / Ctrl+Y</td></tr>
+              <tr><td>Undo / Redo</td><td>Ctrl+Z · Ctrl+Shift+Z</td></tr>
               <tr><td>Play / pause</td><td>Space</td></tr>
               <tr><td>Fit object</td><td>F</td></tr>
               <tr><td>Reset camera</td><td>0</td></tr>
             </tbody>
           </table>
 
-          <p className="modal-subhead">Export &amp; transparency</p>
-          <p className="modal-note">
-            <code>PNG</code> stills and <code>PNG sequences</code> carry full 8-bit alpha — the
-            reliable path for transparency. <code>GIF</code> supports 1-bit alpha (hard edges).
-            Chrome&rsquo;s video encoders cannot write alpha, so <code>MP4</code> / <code>WebM</code>{' '}
-            bake the studio backdrop instead of pretending to be transparent. For{' '}
-            <code>MOV + alpha</code>, export a PNG sequence and convert locally, e.g.{' '}
-            <code>ffmpeg -framerate 30 -i frame_%04d.png -c:v prores_ks -pix_fmt yuva444p10le out.mov</code>
-          </p>
+          <p className="modal-subhead">Transparency in exports</p>
+          <table className="about-table">
+            <tbody>
+              <tr><td>PNG / PNG sequence</td><td>full 8-bit alpha</td></tr>
+              <tr><td>GIF</td><td>1-bit alpha</td></tr>
+              <tr><td>MP4 / WebM</td><td>no alpha (baked backdrop)</td></tr>
+              <tr><td>MOV + alpha</td><td>convert PNG sequence locally</td></tr>
+            </tbody>
+          </table>
 
-          <p className="modal-subhead">Pipeline</p>
-          <p className="modal-note">
-            Stroke-based icons (like lucide) are outlined into solid filled shapes, boolean-unioned
-            into a single clean object, triangulated and extruded with bevels — all locally in your
-            browser, heavy work in a Web Worker.
-          </p>
-        </div>
-      </div>
-    </div>
+          <div className="about-credit">
+            <span
+              className="about-credit-logo"
+              aria-hidden="true"
+              dangerouslySetInnerHTML={{ __html: confiniumSvg }}
+            />
+            Made by Confinium
+          </div>
+    </Modal>
   )
 }
