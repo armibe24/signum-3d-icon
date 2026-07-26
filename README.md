@@ -150,7 +150,9 @@ export, so exported frames match the preview exactly and a keyframe timeline can
   and lazy-loaded; icon ids are library-prefixed (`tabler:activity`) with unprefixed ids staying
   lucide, so old presets keep working. **Tag-aware search** across all libraries ("money" finds
   dollar-sign, banknote, coins…); live grid previews, paged grid with "show more", empty state;
-  custom SVG import via button or drag & drop; complexity/unsupported-feature warnings. All app
+  custom SVG import via button or drag & drop; **PNG → vector import** — local threshold
+  tracing with live preview, invert, transparency handling, hole preservation and noise
+  removal, feeding the same extrusion pipeline; complexity/unsupported-feature warnings. All app
   UI icons come from the local lucide data (`src/components/common/Icon.tsx`) — no remote assets.
 - **3D text**: type any text and extrude it through the same SVG→3D pipeline. Fonts: the app's
   own families bundled as local TTFs (`src/assets/fonts3d/`, SIL OFL) **plus every font installed
@@ -170,7 +172,9 @@ export, so exported frames match the preview exactly and a keyframe timeline can
 - **Material**: 8 presets (black/silver/gold metal, white clay, soft plastic, neon glow, dark
   glossy, warm matte) + 8 modes (solid, clay, plastic, metal, chrome, soft metallic, glassy,
   emissive); base/emissive color, roughness, metalness, opacity, clearcoat, emissive intensity,
-  environment intensity; image-based lighting from a procedural room environment. **Image
+  environment intensity; a **Liquid Metal** preset (static seamless noise normal map — no
+  animation — for mercury-like flowing reflections, with distortion amount/scale controls;
+  exports to GLB/glTF as a standard normal map). **Image
   textures**: load any image as the object's color texture with selectable **UV placement**
   (stretch to the icon, keep image aspect, or per-part 0–1 — all three UV sets are pre-generated
   on the mesh, so switching is rebuild-free via `texture.channel`), a tiling slider, multiplied
@@ -179,10 +183,14 @@ export, so exported frames match the preview exactly and a keyframe timeline can
   colors**: when an icon consists of multiple disconnected parts (e.g. the three ellipsis dots,
   or every glyph of a 3D text), each part gets its own color field — parts are indexed largest
   first, unset parts follow the base color, and color changes never trigger a geometry rebuild.
-- **Lighting**: studio / softbox / dramatic side / top presets; ambient, key, fill, rim
-  intensities; key light azimuth/elevation; shadows + soft shadows; **custom HDRI** — load an
-  equirectangular `.hdr` (Radiance), `.exr` (OpenEXR) or any LDR image as the image-based-
-  lighting environment, used identically by the viewport and every export.
+- **Lighting**: professional studio pipeline — **six bundled HDRI-style environments**
+  (Soft Studio, Bright Product, Dark Studio, High Contrast, Light Strips, Soft Rim Light),
+  generated locally as float equirect textures with real softboxes, light strips and dark
+  flags (no downloads); environment **intensity, rotation and reflection contrast**, tone-
+  mapping **exposure** and **background brightness** controls, all applied identically in the
+  viewport and every export; light-rig presets (studio/softbox/dramatic/top) with ambient,
+  key, fill, rim, azimuth/elevation; shadows + soft shadows; **custom HDRI** — `.hdr`
+  (Radiance), `.exr` (OpenEXR) or any LDR image. Background controls live in this tab too.
 - **Backgrounds**: transparent, checkerboard preview, solid, gradient, studio backdrop, or a
   **loaded image** — cover-cropped behind the object at the viewport aspect and again at the
   exact export aspect, so exports never stretch the backdrop; zoom and horizontal/vertical
@@ -191,7 +199,9 @@ export, so exported frames match the preview exactly and a keyframe timeline can
   (start→end rotation), bounce-in; duration, FPS, loop, speed/turns, direction, easing,
   start/end rotation; play/pause (preview never autoplays); Sonitus-style timeline with
   transport cluster, frame stepping, scrubbing, frame counter and time readout.
-- **Export**: PNG (alpha) / JPG / WebP stills at 512/1024/2048/custom; PNG sequence (ZIP, alpha),
+- **Export**: **3D models** — GLB (geometry + PBR materials + textures, recommended), glTF
+  (embedded), OBJ + MTL as ZIP (colors/roughness/color texture), STL (geometry only);
+  PNG (alpha) / JPG / WebP stills at 512/1024/2048/custom; PNG sequence (ZIP, alpha),
   GIF (1-bit alpha, optional ordered dithering — frame-stable Bayer pattern that smooths the
   256-color gradient banding), MP4 (H.264 via WebCodecs), WebM (VP9); deterministic frame timing;
   progress bar + cancel; UI stays responsive during export.

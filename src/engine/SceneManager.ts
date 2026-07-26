@@ -24,7 +24,7 @@ import { evaluatePose } from './animation'
 import { applyMaterialSettings, createIconMaterial } from './materials'
 import { applyLightingSettings, createLightRig, type LightRig } from './lights'
 import { applyBackgroundCover, backgroundIsImage, resolveBackground } from './background'
-import { getCustomEnvironment, setCustomEnvironment, setEnvironmentChangedListener } from './environment'
+import { getActiveEnvironment, setCustomEnvironment, setEnvironmentChangedListener } from './environment'
 import { BASE_FOV, viewportFov } from './frame'
 
 const DEFAULT_FOV = BASE_FOV
@@ -74,6 +74,7 @@ export class SceneManager {
   onEnvError: ((msg: string) => void) | null = null
 
   private lastBackground: BackgroundSettings | null = null
+  private lastLighting: LightingSettings | null = null
 
   gridVisible = false
   private renderPaused = false
@@ -241,15 +242,27 @@ export class SceneManager {
   }
 
   applyLighting(l: LightingSettings): void {
+    this.lastLighting = l
     applyLightingSettings(this.rig, l)
     this.ground.visible = l.shadows
-    setCustomEnvironment(l.envMap, l.envMapType, (msg) => this.onEnvError?.(msg))
+    if (l.envPreset === 'custom') {
+      setCustomEnvironment(l.envMap, l.envMapType, (msg) => this.onEnvError?.(msg))
+    }
     this.applyEnvironment()
+    // studio controls: rotation + intensity live on the scene, exposure on
+    // the renderer — the export renderer applies its own copies per frame
+    this.scene.environmentRotation.set(0, THREE.MathUtils.degToRad(l.envRotation), 0)
+    this.scene.environmentIntensity = l.envIntensity
+    this.scene.backgroundIntensity = l.backgroundBrightness
+    if (this.renderer) this.renderer.toneMappingExposure = l.exposure
+    // solid-color backdrops don't react to backgroundIntensity — re-resolve
+    if (this.lastBackground) this.applyBackground(this.lastBackground)
   }
 
-  /** built-in room environment unless a custom HDRI/image is loaded */
+  /** bundled studio preset / custom HDRI; room env only as a last fallback */
   private applyEnvironment(): void {
-    this.scene.environment = getCustomEnvironment() ?? this.envTexture
+    const active = this.lastLighting ? getActiveEnvironment(this.lastLighting) : null
+    this.scene.environment = active ?? this.envTexture
   }
 
   applyBackground(b: BackgroundSettings): void {
@@ -258,7 +271,13 @@ export class SceneManager {
     const resolved = resolveBackground(b, () => {
       if (this.lastBackground === b) this.applyBackground(b)
     })
-    this.scene.background = resolved.texture ?? resolved.clearColor
+    if (resolved.clearColor) {
+      // solid colors don't react to scene.backgroundIntensity — bake it in
+      const brightness = this.lastLighting?.backgroundBrightness ?? 1
+      this.scene.background = resolved.clearColor.multiplyScalar(brightness)
+    } else {
+      this.scene.background = resolved.texture
+    }
     this.updateBackgroundCover()
   }
 
@@ -355,6 +374,11 @@ export class SceneManager {
   }
 
   /* ---------------- export support ---------------- */
+
+  /** the live icon geometry + per-part materials (for 3D model export) */
+  getIconModel(): { geometry: THREE.BufferGeometry; materials: THREE.MeshPhysicalMaterial[] } {
+    return { geometry: this.mesh.geometry, materials: this.materials }
+  }
 
   /** pause the viewport render loop for the duration of an export */
   setRenderPaused(paused: boolean): void {

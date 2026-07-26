@@ -82,9 +82,6 @@ export function AnimationControls() {
         onChange={(v) => setSlice('animation', { startRotation: v })} />
       <RotationRow label="End rotation" value={a.endRotation}
         onChange={(v) => setSlice('animation', { endRotation: v })} />
-      <p className="export-note">
-        End rotation drives the <b>Reveal</b> preset. Start rotation offsets every preset.
-      </p>
     </div>
   )
 }

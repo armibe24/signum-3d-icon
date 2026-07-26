@@ -109,9 +109,15 @@ export function MaterialControls() {
             onChange={(v) => edit({ textureMapping: v })} />
           <Slider label="Texture tiling" value={m.textureScale} min={0.25} max={8} step={0.25}
             decimals={2} onChange={(v) => edit({ textureScale: v })} />
-          <p className="export-note">
-            The texture multiplies with the base color — keep the color white to show it unchanged.
-          </p>
+        </>
+      )}
+
+      {m.mode === 'liquid' && (
+        <>
+          <Slider label="Liquid distortion" value={m.liquidAmount} min={0} max={2} step={0.05}
+            decimals={2} onChange={(v) => edit({ liquidAmount: v })} />
+          <Slider label="Distortion scale" value={m.liquidScale} min={0.5} max={8} step={0.1}
+            decimals={1} onChange={(v) => edit({ liquidScale: v })} />
         </>
       )}
 

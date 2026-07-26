@@ -129,7 +129,7 @@ export function parsePreset(json: string): AppSettings {
       preset: str(m.preset, presetIds, 'custom'),
       mode: str(
         m.mode,
-        ['solid', 'clay', 'plastic', 'metal', 'chrome', 'soft-metal', 'glass', 'emissive'] as const,
+        ['solid', 'clay', 'plastic', 'metal', 'chrome', 'soft-metal', 'liquid', 'glass', 'emissive'] as const,
         d.material.mode,
       ),
       color: color(m.color, d.material.color),
@@ -148,6 +148,8 @@ export function parsePreset(json: string): AppSettings {
       textureName: shortStr(m.textureName),
       textureScale: num(m.textureScale, d.material.textureScale, 0.05, 20),
       textureMapping: str(m.textureMapping, ['stretch', 'aspect', 'part'] as const, d.material.textureMapping),
+      liquidAmount: num(m.liquidAmount, d.material.liquidAmount, 0, 2),
+      liquidScale: num(m.liquidScale, d.material.liquidScale, 0.25, 10),
     },
     lighting: {
       preset: str(l.preset, ['studio', 'softbox', 'dramatic', 'top', 'custom'] as const, d.lighting.preset),
@@ -159,6 +161,16 @@ export function parsePreset(json: string): AppSettings {
       keyElevation: num(l.keyElevation, d.lighting.keyElevation, 5, 85),
       shadows: bool(l.shadows, d.lighting.shadows),
       softShadows: bool(l.softShadows, d.lighting.softShadows),
+      envPreset: str(
+        l.envPreset,
+        ['soft-studio', 'bright-product', 'dark-studio', 'high-contrast', 'light-strips', 'rim-light', 'custom'] as const,
+        d.lighting.envPreset,
+      ),
+      envRotation: num(l.envRotation, d.lighting.envRotation, 0, 360),
+      envIntensity: num(l.envIntensity, d.lighting.envIntensity, 0, 3),
+      reflectionContrast: num(l.reflectionContrast, d.lighting.reflectionContrast, 0.5, 2),
+      exposure: num(l.exposure, d.lighting.exposure, 0.25, 2.5),
+      backgroundBrightness: num(l.backgroundBrightness, d.lighting.backgroundBrightness, 0, 2),
       envMap: dataUrl(l.envMap),
       envMapName: shortStr(l.envMapName),
       envMapType: str(l.envMapType, ['hdr', 'exr', 'ldr'] as const, 'ldr'),
@@ -195,6 +207,7 @@ export function parsePreset(json: string): AppSettings {
     export: {
       stillFormat: str(e.stillFormat, ['png', 'jpg', 'webp'] as const, d.export.stillFormat),
       animFormat: str(e.animFormat, ['mp4', 'webm', 'gif', 'png-seq'] as const, d.export.animFormat),
+      modelFormat: str(e.modelFormat, ['glb', 'gltf', 'obj', 'stl'] as const, d.export.modelFormat),
       sizePreset: str(e.sizePreset, ['512', '1024', '2048', 'custom'] as const, d.export.sizePreset),
       width: Math.round(num(e.width, d.export.width, 16, 4096)),
       height: Math.round(num(e.height, d.export.height, 16, 4096)),

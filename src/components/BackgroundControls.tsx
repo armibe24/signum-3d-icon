@@ -53,10 +53,6 @@ export function BackgroundControls() {
                 onChange={(v) => setSlice('background', { imageY: v })} />
             </>
           )}
-          <p className="export-note">
-            The image is cover-cropped behind the object in the preview and in every export — it
-            always fills the frame; zoom and position move it within the crop.
-          </p>
         </>
       )}
 

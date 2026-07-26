@@ -193,7 +193,9 @@ export const store = {
   },
 
   requestSection(id: string) {
-    state = { ...state, openSection: id, activeTab: id }
+    // 'background' lives inside the Lighting tab since the sidebar rework
+    const tab = id === 'background' ? 'lighting' : id
+    state = { ...state, openSection: id, activeTab: tab }
     emit()
   },
 

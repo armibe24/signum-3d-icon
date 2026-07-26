@@ -64,6 +64,7 @@ export type MaterialMode =
   | 'metal'
   | 'chrome'
   | 'soft-metal'
+  | 'liquid'
   | 'glass'
   | 'emissive'
 
@@ -91,11 +92,25 @@ export interface MaterialSettings {
   /** UV placement: stretch across the icon bbox, keep the image aspect
       (squares stay square), or give every disconnected part its own 0..1 */
   textureMapping: TextureMapping
+  /** liquid-metal mode: static surface distortion strength (normal map) */
+  liquidAmount: number
+  /** liquid-metal mode: distortion feature scale (tiling of the noise) */
+  liquidScale: number
 }
 
 export type TextureMapping = 'stretch' | 'aspect' | 'part'
 
 export type LightingPresetId = 'studio' | 'softbox' | 'dramatic' | 'top' | 'custom'
+
+/** bundled procedural studio HDRI environments + user file import */
+export type EnvPresetId =
+  | 'soft-studio'
+  | 'bright-product'
+  | 'dark-studio'
+  | 'high-contrast'
+  | 'light-strips'
+  | 'rim-light'
+  | 'custom'
 
 export interface LightingSettings {
   preset: LightingPresetId
@@ -108,8 +123,20 @@ export interface LightingSettings {
   keyElevation: number
   shadows: boolean
   softShadows: boolean
+  /** bundled studio environment (procedural HDRI) or 'custom' for a file */
+  envPreset: EnvPresetId
+  /** environment rotation around the vertical axis, degrees */
+  envRotation: number
+  /** scene-level environment (reflection/IBL) intensity */
+  envIntensity: number
+  /** contrast curve applied to the bundled environments (1 = neutral) */
+  reflectionContrast: number
+  /** tone-mapping exposure (viewport AND exports) */
+  exposure: number
+  /** multiplier on the backdrop only — separates object from background */
+  backgroundBrightness: number
   /** custom image-based lighting: equirectangular .hdr/.exr or LDR image
-      as a data URL; empty = the built-in procedural studio environment */
+      as a data URL; used when envPreset === 'custom' */
   envMap: string
   envMapName: string
   /** 'hdr' = Radiance RGBE, 'exr' = OpenEXR, 'ldr' = plain image */
@@ -169,11 +196,14 @@ export interface AnimationSettings {
 
 export type StillFormat = 'png' | 'jpg' | 'webp'
 export type AnimFormat = 'mp4' | 'webm' | 'gif' | 'png-seq'
+export type ModelFormat = 'glb' | 'gltf' | 'obj' | 'stl'
 export type SizePresetId = '512' | '1024' | '2048' | 'custom'
 
 export interface ExportSettings {
   stillFormat: StillFormat
   animFormat: AnimFormat
+  /** 3D model export format (GLB recommended) */
+  modelFormat: ModelFormat
   sizePreset: SizePresetId
   width: number
   height: number
@@ -242,6 +272,8 @@ export function defaultSettings(): AppSettings {
       textureName: '',
       textureScale: 1,
       textureMapping: 'stretch',
+      liquidAmount: 0.65,
+      liquidScale: 1.4,
     },
     lighting: {
       preset: 'studio',
@@ -254,6 +286,12 @@ export function defaultSettings(): AppSettings {
       // performance-friendly defaults: shadows are opt-in
       shadows: false,
       softShadows: true,
+      envPreset: 'soft-studio',
+      envRotation: 0,
+      envIntensity: 1,
+      reflectionContrast: 1,
+      exposure: 1,
+      backgroundBrightness: 1,
       envMap: '',
       envMapName: '',
       envMapType: 'ldr',
@@ -282,6 +320,7 @@ export function defaultSettings(): AppSettings {
     export: {
       stillFormat: 'png',
       animFormat: 'png-seq',
+      modelFormat: 'glb',
       sizePreset: '1024',
       width: 1024,
       height: 1024,

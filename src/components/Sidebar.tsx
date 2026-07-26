@@ -11,7 +11,6 @@ import { IconBrowser } from './IconBrowser'
 import { GeometryControls } from './GeometryControls'
 import { MaterialControls } from './MaterialControls'
 import { LightingControls } from './LightingControls'
-import { BackgroundControls } from './BackgroundControls'
 import { AnimationControls } from './AnimationControls'
 import { ExportPanel } from './ExportPanel'
 import { Icon } from './common/Icon'
@@ -22,8 +21,8 @@ const TABS: { id: string; title: string; icon: string; content: ReactNode }[] = 
   { id: 'icon', title: 'Icon', icon: 'shapes', content: <IconBrowser /> },
   { id: 'geometry', title: 'Geometry', icon: 'box', content: <GeometryControls /> },
   { id: 'material', title: 'Material', icon: 'palette', content: <MaterialControls /> },
+  // background controls live inside the Lighting tab
   { id: 'lighting', title: 'Lighting', icon: 'lightbulb', content: <LightingControls /> },
-  { id: 'background', title: 'Background', icon: 'image', content: <BackgroundControls /> },
   { id: 'animation', title: 'Animation', icon: 'film', content: <AnimationControls /> },
   { id: 'export', title: 'Export', icon: 'download', content: <ExportPanel /> },
 ]

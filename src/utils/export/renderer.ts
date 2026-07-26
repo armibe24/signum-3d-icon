@@ -21,8 +21,9 @@ import * as THREE from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { sceneManager } from '../../engine/SceneManager'
 import { applyBackgroundCover, backgroundIsImage, resolveBackground } from '../../engine/background'
-import { getCustomEnvironment } from '../../engine/environment'
+import { getActiveEnvironment } from '../../engine/environment'
 import { BASE_FOV } from '../../engine/frame'
+import { store } from '../../store/store'
 import type { AnimationSettings, BackgroundSettings } from '../../types'
 
 export class ExportRenderer {
@@ -89,13 +90,20 @@ export class ExportRenderer {
 
     const prevEnv = scene.environment
     const prevBg = scene.background
-    // custom equirect HDRIs are PMREM'd per-context by the renderer, so the
-    // shared texture works here directly; only the procedural room fallback
-    // needs this context's own PMREM copy
-    scene.environment = getCustomEnvironment() ?? this.env
+    const lighting = store.get().settings.lighting
+    // equirect environments (bundled studio presets and custom HDRIs) are
+    // PMREM'd per-context by the renderer, so the shared texture works here
+    // directly; only the procedural room fallback needs this context's own
+    // PMREM copy. Exposure matches the viewport for identical output.
+    scene.environment = getActiveEnvironment(lighting) ?? this.env
+    this.renderer.toneMappingExposure = lighting.exposure
 
     const resolved = resolveBackground(background)
-    scene.background = resolved.texture ?? resolved.clearColor
+    if (resolved.clearColor) {
+      scene.background = resolved.clearColor.multiplyScalar(lighting.backgroundBrightness)
+    } else {
+      scene.background = resolved.texture
+    }
     if (resolved.texture && backgroundIsImage(background)) {
       // crop to the EXPORT aspect (the viewport re-crops itself each frame)
       applyBackgroundCover(resolved.texture, this.width / this.height, background)

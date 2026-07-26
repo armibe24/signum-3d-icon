@@ -20,6 +20,7 @@ import { Icon } from './common/Icon'
 import { Select } from './common/Select'
 import { Slider } from './common/Slider'
 import { FontSelect } from './common/FontSelect'
+import { PngImportModal } from './PngImportModal'
 import {
   TEXT_FONTS,
   listSystemFonts,
@@ -77,6 +78,7 @@ export function IconBrowser() {
     icon.type === 'text' ? (icon.textDetail ?? DEFAULT_TEXT_DETAIL) : DEFAULT_TEXT_DETAIL,
   )
   const [systemFonts, setSystemFonts] = useState<SystemFontEntry[] | null>(null)
+  const [showPngImport, setShowPngImport] = useState(false)
 
   const applyText = (
     text: string,
@@ -270,7 +272,11 @@ export function IconBrowser() {
         >
           Import custom SVG
         </button>
+        <button type="button" className="btn btn--sm" onClick={() => setShowPngImport(true)}>
+          Import PNG…
+        </button>
       </div>
+      {showPngImport && <PngImportModal onClose={() => setShowPngImport(false)} />}
       <p className="import-meta">
         Drag &amp; drop an <b>.svg</b> onto the viewport also works. Strokes are outlined into solid
         shapes automatically.

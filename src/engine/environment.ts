@@ -15,6 +15,7 @@
 import * as THREE from 'three'
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
 import { EXRLoader } from 'three/addons/loaders/EXRLoader.js'
+import { getPresetEnvironment } from './environments'
 
 let current: THREE.Texture | null = null
 let currentKey = ''
@@ -29,6 +30,20 @@ export function setEnvironmentChangedListener(fn: () => void): void {
 /** the currently loaded custom environment, or null for the built-in one */
 export function getCustomEnvironment(): THREE.Texture | null {
   return current
+}
+
+/**
+ * The environment texture the scene should currently use — the bundled
+ * procedural studio preset, or the user's imported map for 'custom'.
+ * Shared by the viewport and the export renderer (equirect textures are
+ * PMREM-converted per GL context by the renderer itself).
+ */
+export function getActiveEnvironment(l: {
+  envPreset: import('../types').EnvPresetId
+  reflectionContrast: number
+}): THREE.Texture | null {
+  if (l.envPreset === 'custom') return current
+  return getPresetEnvironment(l.envPreset, l.reflectionContrast)
 }
 
 /**

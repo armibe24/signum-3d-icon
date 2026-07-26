@@ -4,8 +4,16 @@ import { Toggle } from './common/Toggle'
 import { Icon } from './common/Icon'
 import { setSlice, useStore } from '../store/store'
 import { exportAnimation, exportStill } from '../utils/export/exporter'
+import { exportModel } from '../utils/export/model'
 import { store } from '../store/store'
 import type { SizePresetId } from '../types'
+
+const MODEL_NOTES: Record<string, string> = {
+  glb: 'GLB (recommended) — geometry, PBR materials and textures in one file.',
+  gltf: 'glTF — single .gltf file with embedded buffers and textures.',
+  obj: 'OBJ + MTL — packaged as ZIP; colors, roughness and color texture only.',
+  stl: 'STL — geometry only (the format cannot store materials).',
+}
 
 const SIZE_MAP: Record<Exclude<SizePresetId, 'custom'>, number> = { '512': 512, '1024': 1024, '2048': 2048 }
 
@@ -103,6 +111,21 @@ export function ExportPanel() {
           </button>
         </div>
       )}
+
+      <Select label="3D model format" value={ex.modelFormat}
+        options={[
+          { value: 'glb', label: 'GLB (recommended)' },
+          { value: 'gltf', label: 'glTF (embedded)' },
+          { value: 'obj', label: 'OBJ + MTL (ZIP)' },
+          { value: 'stl', label: 'STL — geometry only' },
+        ]}
+        onChange={(v) => setSlice('export', { modelFormat: v })} />
+      <p className="export-note">{MODEL_NOTES[ex.modelFormat]}</p>
+      <button type="button" className="btn btn--sm" style={{ justifyContent: 'center' }}
+        onClick={() => void exportModel(store.get().settings.export.modelFormat)}>
+        <Icon name="box" size={12} strokeWidth={2.2} />
+        Export 3D model
+      </button>
     </div>
   )
 }
